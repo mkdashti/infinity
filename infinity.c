@@ -462,6 +462,12 @@ int main(int argc, char **argv) {
          perror("Couldn't set a kernel argument");
          exit(1);   
       };
+      err = clSetKernelArg(kernel, 5, sizeof(int), &do_shuffle);
+      if(err < 0) {
+         perror("Couldn't set a kernel argument");
+         exit(1);   
+      };
+
 
 
       /* Enqueue kernel */
