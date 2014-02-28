@@ -253,8 +253,13 @@ int main(int argc, char **argv) {
    if((message_size%nthreads)!=0) {
       perror("invalid buffer size or number of threads \n");
       exit(1);
-   }   
-   unsigned long portion_size = message_size/nthreads;
+   }  
+
+   unsigned long portion_size;
+  if (do_shuffle) 
+     portion_size = message_size/nthreads;
+  else
+     portion_size = nthreads;
 
    message = (int *)malloc(sizeof(int)*message_size);
    if(message == NULL) {
