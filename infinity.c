@@ -282,7 +282,7 @@ int main(int argc, char **argv) {
    //printf("Inititial checksum before shuffle = %lu\n",checksum);
 
    if(do_shuffle) {
-      printf("shuffling the index array ...\n");
+      //printf("shuffling the index array ...\n");
       shuffle(message,message_size);
    }
 
@@ -341,8 +341,11 @@ int main(int argc, char **argv) {
       pthread_attr_destroy(&attr);
       free(p);
 
-      printf("Time to execute on CPU = %f ms\n",
+     // printf("Time to execute on CPU = %f ms\n",
+     //       diff(start_time,end_time)/1000000.0);
+      printf("%f\n",
             diff(start_time,end_time)/1000000.0);
+ 
       //Confirm that the resulting data array is correct (all values have become = 1)
       if(debug) {
          for(i=0; i<message_size; i++)
@@ -555,10 +558,11 @@ int main(int argc, char **argv) {
       clGetEventProfilingInfo(ev_enqueue_unmap_buffer,CL_PROFILING_COMMAND_START,sizeof(cl_ulong),&starttime[3],NULL);
       clGetEventProfilingInfo(ev_enqueue_unmap_buffer,CL_PROFILING_COMMAND_END,sizeof(cl_ulong),&endtime[3],NULL);
 
-      printf("time to enqueue map buffer = %lu ms\n", (endtime[0]-starttime[0])/1000000);
-      printf("time to enqueue read buffer = %lu ms\n", (endtime[1]-starttime[1])/1000000);
-      printf("time to execute on kernel on GPU  = %f ms\n", (double)(endtime[2]-starttime[2])/1000000.0);
-      printf("time to enqueue unmap buffer = %lu ms\n", (endtime[3]-starttime[3])/1000000);
+      //printf("time to enqueue map buffer = %lu ms\n", (endtime[0]-starttime[0])/1000000);
+      //printf("time to enqueue read buffer = %lu ms\n", (endtime[1]-starttime[1])/1000000);
+      //printf("time to execute on kernel on GPU  = %f ms\n", (double)(endtime[2]-starttime[2])/1000000.0);
+      printf("%f\n", (double)(endtime[2]-starttime[2])/1000000.0);
+      //printf("time to enqueue unmap buffer = %lu ms\n", (endtime[3]-starttime[3])/1000000);
 
       clReleaseEvent(ev_enqueue_map_buffer);
       clReleaseEvent(ev_enqueue_read_buffer);
