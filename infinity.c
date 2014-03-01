@@ -25,7 +25,7 @@
 int *global_data_array, *global_index_array;
 unsigned long global_portion_size; 
 
-unsigned long diff(struct timespec start, struct timespec end)
+double diff(struct timespec start, struct timespec end)
 {
    struct timespec temp;
    if ((end.tv_nsec-start.tv_nsec)<0) {
@@ -36,9 +36,9 @@ unsigned long diff(struct timespec start, struct timespec end)
       temp.tv_nsec = end.tv_nsec-start.tv_nsec;
    }
    if(temp.tv_sec)
-      return (temp.tv_sec*1000000000+temp.tv_nsec);
+      return (double)(temp.tv_sec*1000000000+temp.tv_nsec);
    else
-      return temp.tv_nsec;
+      return (double)temp.tv_nsec;
 
 }
 
@@ -341,9 +341,8 @@ int main(int argc, char **argv) {
       pthread_attr_destroy(&attr);
       free(p);
 
-      printf("Time to execute on CPU = %lu ns = %lu ms\n",
-            diff(start_time,end_time),
-            diff(start_time,end_time)/1000000L);
+      printf("Time to execute on CPU = %f ms\n",
+            diff(start_time,end_time)/1000000.0);
       //Confirm that the resulting data array is correct (all values have become = 1)
       if(debug) {
          for(i=0; i<message_size; i++)
@@ -522,7 +521,7 @@ int main(int argc, char **argv) {
          perror("Unmap buffer failed");
          exit(1);   
       }
-      printf("CL_DEVICE_MAX_MEM_ALLOC_SIZE %lu\n", max_buffer_size);   
+      //printf("CL_DEVICE_MAX_MEM_ALLOC_SIZE %lu\n", max_buffer_size);   
 
       //Confirm that the resulting data array is correct (all values have become = 1)
       if(debug) {
@@ -558,7 +557,7 @@ int main(int argc, char **argv) {
 
       printf("time to enqueue map buffer = %lu ms\n", (endtime[0]-starttime[0])/1000000);
       printf("time to enqueue read buffer = %lu ms\n", (endtime[1]-starttime[1])/1000000);
-      printf("time to enqueue kernel = %lu ns = %lu ms\n", (endtime[2]-starttime[2]), (endtime[2]-starttime[2])/1000000);
+      printf("time to execute on kernel on GPU  = %f ms\n", (double)(endtime[2]-starttime[2])/1000000.0);
       printf("time to enqueue unmap buffer = %lu ms\n", (endtime[3]-starttime[3])/1000000);
 
       clReleaseEvent(ev_enqueue_map_buffer);
