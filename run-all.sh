@@ -8,8 +8,11 @@ do
    for THREAD in 1 2 4 8 16
    do
       for SHUFFLE in 0 1
-      do
-         echo "CPU $THREAD $SHUFFLE $MEMORY `./infinity -t $THREAD -s $SHUFFLE -m $MEMORY`" >> output.txt
+      do 
+         for ITR in 0 1 2 3 4
+         do
+            echo "CPU $THREAD $SHUFFLE $MEMORY `./infinity -t $THREAD -s $SHUFFLE -m $MEMORY`" >> output.txt
+         done
       done
    done
 done
@@ -23,7 +26,10 @@ do
    do
       for SHUFFLE in 0 1
       do
-         echo "GPU $THREAD $SHUFFLE $MEMORY `./infinity -g 1 -t $THREAD -s $SHUFFLE -m $MEMORY`" >> output.txt
+         for ITR in 0 1 2 3 4
+         do
+            echo "GPU $THREAD $SHUFFLE $MEMORY `./infinity -g 1 -t $THREAD -s $SHUFFLE -m $MEMORY`" >> output.txt
+         done
       done
    done
 done
