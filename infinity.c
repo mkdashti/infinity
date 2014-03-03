@@ -256,9 +256,9 @@ int main(int argc, char **argv) {
    }  
 
    unsigned long portion_size;
-  if (do_shuffle) 
+  if (do_shuffle || !gpu_run) 
      portion_size = message_size/nthreads;
-  else
+  else if (gpu_run)
      portion_size = nthreads;
 
    message = (int *)malloc(sizeof(int)*message_size);
