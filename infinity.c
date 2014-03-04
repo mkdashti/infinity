@@ -69,6 +69,7 @@ void *work( void *arg ) {
    int tid = gettid();                                                                                                   
    int i;
    int temp;
+   int garbage=0;
   // printf("Assigning thread %d (tid = %d) to core %d\n", p->id, tid, (p->id)%get_nprocs());
    set_affinity(tid, (p->id)%get_nprocs());
 
@@ -79,6 +80,8 @@ void *work( void *arg ) {
       for(i=startof_portion; i<endof_portion ; i++)
       //global_read_array[global_index_array[i]] = global_data_array[global_index_array[i]];
       temp = global_data_array[global_index_array[i]];
+      if(temp < 7)
+         garbage++;
    }
    else {
       for(i=startof_portion; i<endof_portion ; i++)

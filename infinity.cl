@@ -7,7 +7,7 @@ __kernel void infinity(__global int *index_array,
                                 int read_bench) {
 
 size_t idx = get_global_id(0);
-int temp;
+int temp,garbage = 0;
 int i;
 int startof_portion, endof_portion;
 
@@ -20,6 +20,8 @@ if(do_shuffle) {
    if(read_bench) {
    for(i=startof_portion; i<endof_portion ; i++)
       temp = data_array[index_array[i]];
+      if(temp < 7)
+         garbage++;
       }
    else {
  for(i=startof_portion; i<endof_portion ; i++)
@@ -30,6 +32,8 @@ else {
    if(read_bench) {
       for(i=0; i<=(array_size-portion_size); i=i+portion_size)
          temp = data_array[index_array[idx+i]];
+         if(temp < 7)
+            garbage++;
       }
    else {
       for(i=0; i<=(array_size-portion_size); i=i+portion_size)
