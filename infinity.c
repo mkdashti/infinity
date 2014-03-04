@@ -22,8 +22,9 @@
 #include <sys/time.h>
 #include <time.h>
 
-int *global_data_array, *global_index_array;
-unsigned long global_portion_size; 
+int *global_data_array, *global_index_array, *global_read_array;
+unsigned long global_portion_size;
+int global_read_bench;
 
 double diff(struct timespec start, struct timespec end)
 {
@@ -67,14 +68,23 @@ void *work( void *arg ) {
    parm *p=(parm *)arg;
    int tid = gettid();                                                                                                   
    int i;
+   int temp;
   // printf("Assigning thread %d (tid = %d) to core %d\n", p->id, tid, (p->id)%get_nprocs());
    set_affinity(tid, (p->id)%get_nprocs());
 
    int startof_portion = (p->id)*global_portion_size;
    int endof_portion = startof_portion + global_portion_size;
-   for(i=startof_portion; i<endof_portion ; i++)
+
+   if(global_read_bench) {
+      for(i=startof_portion; i<endof_portion ; i++)
+      //global_read_array[global_index_array[i]] = global_data_array[global_index_array[i]];
+      temp = global_data_array[global_index_array[i]];
+   }
+   else {
+      for(i=startof_portion; i<endof_portion ; i++)
       global_data_array[global_index_array[i]] = 1;
 
+   }
    return 0;
 }
 
@@ -211,7 +221,7 @@ int main(int argc, char **argv) {
 
    /* Data and buffers */
    cl_mem msg_buffer, data_buffer;
-   int *message, *data_array;
+   int *message, *data_array, *read_array;
    //unsigned long  message_size = 1024*1024*128;  //larger than 200 sometimes makes some fuctions fail.
    unsigned long  message_size = 1024;  //larger than 200 sometimes makes some fuctions fail.
    //unsigned long checksum = 0;
@@ -223,8 +233,9 @@ int main(int argc, char **argv) {
    int gpu_run=0;
    int do_shuffle=0;
    int debug=0;
+   int read_bench=0;
 
-   while ((opt = getopt(argc, argv, "g:t:s:m:d:")) != -1) {
+   while ((opt = getopt(argc, argv, "g:t:s:m:d:r:h:")) != -1) {
       switch (opt) {
          case 'g':
             gpu_run = atoi(optarg);
@@ -244,6 +255,10 @@ int main(int argc, char **argv) {
             break;
          case 'h':
             usage();
+            break;
+         case 'r':
+            read_bench = atoi(optarg);
+            global_read_bench = read_bench;
             break;
          default: /* '?' */
             usage();
@@ -271,6 +286,12 @@ int main(int argc, char **argv) {
       perror("malloc failed \n");
       exit(1);   
    }
+   read_array = (int *)malloc(sizeof(int)*message_size);
+   if(read_array == NULL) {
+      perror("malloc failed \n");
+      exit(1);   
+   }
+
 
    // cheking that shuffling the array doesn't remove/repeat elements by naively summing
    // all the elements of the array and considering the sum as the checksum...ok
@@ -305,6 +326,7 @@ int main(int argc, char **argv) {
    // /////////////////////////////////////////////
 
    global_data_array = data_array;
+   global_read_array = read_array;
    global_index_array = message;
    global_portion_size = portion_size;
 
@@ -474,6 +496,12 @@ int main(int argc, char **argv) {
          perror("Couldn't set a kernel argument");
          exit(1);   
       };
+      err = clSetKernelArg(kernel, 6, sizeof(int), &read_bench);
+      if(err < 0) {
+         perror("Couldn't set a kernel argument");
+         exit(1);   
+      };
+
 
 
 
