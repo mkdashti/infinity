@@ -22,6 +22,8 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "GPUPerfAPI.h"
+
 int *global_data_array, *global_index_array, *global_read_array;
 unsigned long global_portion_size;
 int global_read_bench;
@@ -274,10 +276,10 @@ int main(int argc, char **argv) {
    }  
 
    unsigned long portion_size;
-  if (do_shuffle || !gpu_run) 
-     portion_size = message_size/nthreads;
-  else if (gpu_run)
-     portion_size = nthreads;
+   if (do_shuffle || !gpu_run) 
+      portion_size = message_size/nthreads;
+   else if (gpu_run)
+      portion_size = nthreads;
 
    message = (int *)malloc(sizeof(int)*message_size);
    if(message == NULL) {
@@ -403,6 +405,17 @@ int main(int argc, char **argv) {
          exit(1);   
       };
 
+      GPA_Status GS;
+      GS=GPA_Initialize();
+      if(GS != GPA_STATUS_OK) {
+         perror("GPA_Initialize failed\n");
+         exit(1);
+      }
+      GS=GPA_OpenContext(&queue);
+      if(GS != GPA_STATUS_OK) {
+         perror("GPA_OpenContext failed\n");
+         exit(1);
+      }
 
       /* Create a buffer to hold the output data */
       //msg_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(msg), msg, &err);

@@ -24,7 +24,7 @@ ifneq ($(DARWIN),)
 else
 
 # Linux OS
-LIBS=-lOpenCL -lpthread -lrt
+LIBS=-lOpenCL -lpthread -lrt -ldl
 ifeq ($(PROC_TYPE),)
 	CFLAGS+=-m32
 else
@@ -50,7 +50,7 @@ endif
 endif
 
 $(PROJ): $(PROJ).c
-	$(CC) $(CFLAGS) -o $@ $^ $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS) -L. -lGPUPerfAPICL
 
 .PHONY: clean
 
