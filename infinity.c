@@ -24,6 +24,111 @@
 
 #include "GPUPerfAPI.h"
 
+#define true 1
+#define false 0
+
+//#pragma warning( disable : 4996 ) 
+
+void WriteSession( gpa_uint32 currentWaitSessionID, 
+      const char* filename ) 
+{ 
+   static bool doneHeadings = false; 
+
+   gpa_uint32 count; 
+   GPA_GetEnabledCount( &count ); 
+
+   FILE* f; 
+
+   if ( !doneHeadings ) 
+   { 
+      const char* name; 
+
+      f = fopen( filename, "w" ); 
+      assert( f ); 
+
+      fprintf( f, "Identifier, " ); 
+
+      for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
+      { 
+         gpa_uint32 enabledCounterIndex; 
+         GPA_GetEnabledIndex( counter, &enabledCounterIndex ); 
+         GPA_GetCounterName( enabledCounterIndex, &name ); 
+
+         fprintf( f, "%s, ", name ); 
+      } 
+
+      fprintf( f, "\n" ); 
+
+      fclose( f ); 
+
+      doneHeadings = true; 
+   } 
+
+   f = fopen( filename, "a+" ); 
+
+   assert( f ); 
+
+   gpa_uint32 sampleCount; 
+   GPA_GetSampleCount( currentWaitSessionID, &sampleCount ); 
+
+
+   for (gpa_uint32 sample = 0 ; sample < sampleCount ; sample++ ) 
+   {
+      fprintf( f, "session: %d; sample: %d, ", currentWaitSessionID, 
+            sample ); 
+
+      for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
+      { 
+         gpa_uint32 enabledCounterIndex; 
+         GPA_GetEnabledIndex( counter, &enabledCounterIndex ); 
+         GPA_Type type; 
+         GPA_GetCounterDataType( enabledCounterIndex, &type ); 
+
+         if ( type == GPA_TYPE_UINT32 ) 
+         { 
+            gpa_uint32 value; 
+            GPA_GetSampleUInt32( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ); 
+
+            fprintf( f, "%u,", value ); 
+         } 
+         else if ( type == GPA_TYPE_UINT64 ) 
+         { 
+            gpa_uint64 value; 
+            GPA_GetSampleUInt64( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ); 
+            //fprintf( f, "%I64u,", value ); 
+            fprintf( f, "%lu,", value ); 
+         } 
+         else if ( type == GPA_TYPE_FLOAT32 ) 
+         { 
+            gpa_float32 value; 
+            GPA_GetSampleFloat32( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ); 
+            fprintf( f, "%f,", value ); 
+         } 
+         else if ( type == GPA_TYPE_FLOAT64 ) 
+         { 
+            gpa_float64 value; 
+            GPA_GetSampleFloat64( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ); 
+            fprintf( f, "%f,", value ); 
+         } 
+         else 
+         { 
+            assert(false); 
+         } 
+      } 
+
+      fprintf( f, "\n" ); 
+   } 
+
+   fclose( f ); 
+} 
+
+//#pragma warning( default : 4996 ) 
+
+
 int *global_data_array, *global_index_array, *global_read_array;
 unsigned long global_portion_size;
 int global_read_bench;
@@ -405,17 +510,99 @@ int main(int argc, char **argv) {
          exit(1);   
       };
 
+
+      //GPUPerfAPI stuff start here
+      //
       GPA_Status GS;
       GS=GPA_Initialize();
       if(GS != GPA_STATUS_OK) {
          perror("GPA_Initialize failed\n");
          exit(1);
       }
-      GS=GPA_OpenContext(&queue);
+      GS=GPA_OpenContext(queue);
       if(GS != GPA_STATUS_OK) {
          perror("GPA_OpenContext failed\n");
          exit(1);
       }
+
+      gpa_uint32 gpa_count;
+      GS=GPA_GetNumCounters(&gpa_count);
+      if(GS != GPA_STATUS_OK) {
+         perror("GPA_GetNumCounters failed\n");
+         exit(1);
+      }
+      printf("%d \n",gpa_count);
+
+      for(int tt=0; tt<gpa_count; tt++) {
+         const char * gpa_name;
+         GS=GPA_GetCounterName(tt, &gpa_name);
+         if(GS != GPA_STATUS_OK) {
+            perror("GPA_GetCounterName failed\n");
+            exit(1);
+         }
+         printf("%s \n",gpa_name);
+      }
+
+      GS=GPA_EnableAllCounters(); 
+      if(GS != GPA_STATUS_OK) {
+         perror("GPA_EnableAllCounters failed\n");
+         exit(1);
+      }
+
+      gpa_uint32 numPasses;
+      GS=GPA_GetPassCount(&numPasses);
+      if(GS != GPA_STATUS_OK) {
+         perror("GPA_GetPassCount failed\n");
+         exit(1);
+      }
+      printf("numPasses = %d \n",gpa_count);
+
+      static gpa_uint32 currentWaitSessionID = 1; 
+
+      gpa_uint32 sessionID; 
+      GPA_BeginSession(&sessionID); 
+
+      for ( gpa_uint32 i = 0; i < numPasses; i++ ) 
+      { 
+         GPA_BeginPass(); 
+
+         GPA_BeginSample( 0 ); 
+         //<API function call> 
+         GPA_EndSample(); 
+
+         GPA_BeginSample( 1 ); 
+         //<API function call> 
+         GPA_EndSample(); 
+
+         GPA_EndPass(); 
+      } 
+
+      GPA_EndSession(); 
+
+      bool readyResult = false; 
+      if ( sessionID != currentWaitSessionID ) 
+      {
+         GPA_Status sessionStatus; 
+         sessionStatus = GPA_IsSessionReady( &readyResult, 
+               currentWaitSessionID ); 
+
+         while ( sessionStatus == GPA_STATUS_ERROR_SESSION_NOT_FOUND ) 
+         { 
+            // skipping a session which got overwritten 
+            currentWaitSessionID++; 
+            sessionStatus = GPA_IsSessionReady( &readyResult, 
+                  currentWaitSessionID ); 
+         } 
+      } 
+
+      if ( readyResult ) 
+      { 
+         WriteSession( currentWaitSessionID, "./CounterResults.csv" ); 
+         currentWaitSessionID++; 
+      } 
+
+      GPA_CloseContext(); 
+      GPA_Destroy();
 
       /* Create a buffer to hold the output data */
       //msg_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(msg), msg, &err);
