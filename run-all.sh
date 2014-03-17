@@ -1,5 +1,5 @@
 #!/bin/bash
-OUTPUT=GPU_output_r_w.txt
+OUTPUT=GPUPerfAPI_output_r_w.txt
 
 date >> $OUTPUT
 

@@ -31,6 +31,7 @@
 #define error_return() { fprintf(stderr, "Error %s:line %d: \n",__FILE__,__LINE__);  exit(1); }
 
 struct settings_s {
+   int threads;
    int shuffle;
    int read;
    int memory;
@@ -46,7 +47,8 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
       const char* filename,
       struct settings_s settings ) 
 { 
-   static bool doneHeadings = FALSE; 
+   //static bool doneHeadings = FALSE; 
+   static bool doneHeadings = TRUE; 
 
    gpa_uint32 count; 
    if(GPA_GetEnabledCount( &count ))
@@ -63,7 +65,8 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
       assert( f ); 
 
       fprintf( f, "Identifier, " ); 
-      fprintf( f, "Compute Time, " ); 
+      fprintf( f, "Compute Time, " );
+      fprintf( f, "Threads, " );
       fprintf( f, "Shuffle, " ); 
       fprintf( f, "READ, " ); 
       fprintf( f, "Memory Size, " ); 
@@ -101,6 +104,7 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
             sample ); 
 
       fprintf( f, "%f, ",settings.compute_time ); 
+      fprintf( f, "%d, ",settings.threads ); 
       fprintf( f, "%d, ",settings.shuffle ); 
       fprintf( f, "%d, ",settings.read ); 
       fprintf( f, "%d, ",settings.memory ); 
@@ -380,6 +384,7 @@ int main(int argc, char **argv) {
    int read_bench=0;
 
    struct settings_s settings;
+   settings.threads=0;
    settings.shuffle=0;
    settings.read=0;
    settings.memory=0;
@@ -391,6 +396,7 @@ int main(int argc, char **argv) {
          case 't':
             nthreads = atoi(optarg);
             global_work_size = nthreads;
+            settings.threads = nthreads;
             break;
          case 's':
             do_shuffle = atoi(optarg);
@@ -844,7 +850,8 @@ int main(int argc, char **argv) {
       settings.compute_time = compute_time;
       if (readyResult) 
       { 
-         WriteSession( currentWaitSessionID, "./CounterResults.csv",settings ); 
+         //WriteSession( currentWaitSessionID, "./CounterResults.csv",settings ); 
+         WriteSession( currentWaitSessionID, "./temp.csv",settings ); 
          currentWaitSessionID++; 
       } 
 
