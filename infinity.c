@@ -34,6 +34,7 @@ struct settings_s {
    int shuffle;
    int read;
    int memory;
+   double compute_time;
 };
 
 void MyLoggingFunction( GPA_Logging_Type messageType, const char* message )
@@ -62,6 +63,7 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
       assert( f ); 
 
       fprintf( f, "Identifier, " ); 
+      fprintf( f, "Compute Time, " ); 
 
       for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
       { 
@@ -94,6 +96,8 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
    {
       fprintf( f, "session: %d; sample: %d, shuffle: %d, read: %d, memory: %d, ", currentWaitSessionID, 
             sample, settings.shuffle, settings.read, settings.memory ); 
+
+      fprintf( f, "%f, ",settings.compute_time ); 
 
       for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
       { 
@@ -761,18 +765,6 @@ int main(int argc, char **argv) {
          } 
       } 
 
-      if (readyResult) 
-      { 
-         WriteSession( currentWaitSessionID, "./CounterResults.csv",settings ); 
-         currentWaitSessionID++; 
-      } 
-
-      if(GPA_CloseContext())
-        error_return(); 
-      if(GPA_Destroy())
-         error_return();
-
-
       /* Read and print the result */
       err = clEnqueueReadBuffer(queue,
             data_buffer,
@@ -836,8 +828,25 @@ int main(int argc, char **argv) {
       //printf("time to enqueue map buffer = %lu ms\n", (endtime[0]-starttime[0])/1000000);
       //printf("time to enqueue read buffer = %lu ms\n", (endtime[1]-starttime[1])/1000000);
       //printf("time to execute on kernel on GPU  = %f ms\n", (double)(endtime[2]-starttime[2])/1000000.0);
-      printf("%f\n", (double)(endtime[2]-starttime[2])/1000000.0);
+      double compute_time = (double)(endtime[2]-starttime[2])/1000000.0;
+      printf("%f\n", compute_time);
       //printf("time to enqueue unmap buffer = %lu ms\n", (endtime[3]-starttime[3])/1000000);
+
+
+      settings.compute_time = compute_time;
+      if (readyResult) 
+      { 
+         WriteSession( currentWaitSessionID, "./CounterResults.csv",settings ); 
+         currentWaitSessionID++; 
+      } 
+
+      if(GPA_CloseContext())
+         error_return(); 
+      if(GPA_Destroy())
+         error_return();
+
+
+
 
       clReleaseEvent(ev_enqueue_map_buffer);
       clReleaseEvent(ev_enqueue_read_buffer);
