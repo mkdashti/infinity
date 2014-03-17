@@ -24,18 +24,32 @@
 
 #include "GPUPerfAPI.h"
 
-#define true 1
-#define false 0
-
+#define TRUE 1
+#define FALSE 0
 //#pragma warning( disable : 4996 ) 
 
+#define error_return() { fprintf(stderr, "Error %s:line %d: \n",__FILE__,__LINE__);  exit(1); }
+
+struct settings_s {
+   int shuffle;
+   int read;
+   int memory;
+};
+
+void MyLoggingFunction( GPA_Logging_Type messageType, const char* message )
+{
+   printf("LOGGING: %s\n",message);
+}
+
 void WriteSession( gpa_uint32 currentWaitSessionID, 
-      const char* filename ) 
+      const char* filename,
+      struct settings_s settings ) 
 { 
-   static bool doneHeadings = false; 
+   static bool doneHeadings = FALSE; 
 
    gpa_uint32 count; 
-   GPA_GetEnabledCount( &count ); 
+   if(GPA_GetEnabledCount( &count ))
+     error_return(); 
 
    FILE* f; 
 
@@ -43,7 +57,8 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
    { 
       const char* name; 
 
-      f = fopen( filename, "w" ); 
+      //f = fopen( filename, "w" ); 
+      f = fopen( filename, "a+" ); 
       assert( f ); 
 
       fprintf( f, "Identifier, " ); 
@@ -51,8 +66,10 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
       for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
       { 
          gpa_uint32 enabledCounterIndex; 
-         GPA_GetEnabledIndex( counter, &enabledCounterIndex ); 
-         GPA_GetCounterName( enabledCounterIndex, &name ); 
+         if(GPA_GetEnabledIndex( counter, &enabledCounterIndex ))
+           error_return(); 
+         if(GPA_GetCounterName( enabledCounterIndex, &name ))
+           error_return(); 
 
          fprintf( f, "%s, ", name ); 
       } 
@@ -61,7 +78,7 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
 
       fclose( f ); 
 
-      doneHeadings = true; 
+      doneHeadings = TRUE; 
    } 
 
    f = fopen( filename, "a+" ); 
@@ -69,54 +86,61 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
    assert( f ); 
 
    gpa_uint32 sampleCount; 
-   GPA_GetSampleCount( currentWaitSessionID, &sampleCount ); 
+   if(GPA_GetSampleCount( currentWaitSessionID, &sampleCount ))
+     error_return(); 
 
 
    for (gpa_uint32 sample = 0 ; sample < sampleCount ; sample++ ) 
    {
-      fprintf( f, "session: %d; sample: %d, ", currentWaitSessionID, 
-            sample ); 
+      fprintf( f, "session: %d; sample: %d, shuffle: %d, read: %d, memory: %d, ", currentWaitSessionID, 
+            sample, settings.shuffle, settings.read, settings.memory ); 
 
       for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
       { 
          gpa_uint32 enabledCounterIndex; 
-         GPA_GetEnabledIndex( counter, &enabledCounterIndex ); 
+         if(GPA_GetEnabledIndex( counter, &enabledCounterIndex ))
+           error_return(); 
          GPA_Type type; 
-         GPA_GetCounterDataType( enabledCounterIndex, &type ); 
+         if(GPA_GetCounterDataType( enabledCounterIndex, &type ))
+           error_return(); 
 
          if ( type == GPA_TYPE_UINT32 ) 
          { 
             gpa_uint32 value; 
-            GPA_GetSampleUInt32( currentWaitSessionID, 
-                  sample, enabledCounterIndex, &value ); 
+            if(GPA_GetSampleUInt32( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ))
+              error_return(); 
 
             fprintf( f, "%u,", value ); 
          } 
          else if ( type == GPA_TYPE_UINT64 ) 
          { 
             gpa_uint64 value; 
-            GPA_GetSampleUInt64( currentWaitSessionID, 
-                  sample, enabledCounterIndex, &value ); 
+            if(GPA_GetSampleUInt64( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ))
+              error_return(); 
             //fprintf( f, "%I64u,", value ); 
             fprintf( f, "%lu,", value ); 
          } 
          else if ( type == GPA_TYPE_FLOAT32 ) 
          { 
             gpa_float32 value; 
-            GPA_GetSampleFloat32( currentWaitSessionID, 
-                  sample, enabledCounterIndex, &value ); 
+            if(GPA_GetSampleFloat32( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ))
+              error_return(); 
             fprintf( f, "%f,", value ); 
          } 
          else if ( type == GPA_TYPE_FLOAT64 ) 
          { 
             gpa_float64 value; 
-            GPA_GetSampleFloat64( currentWaitSessionID, 
-                  sample, enabledCounterIndex, &value ); 
+            if(GPA_GetSampleFloat64( currentWaitSessionID, 
+                  sample, enabledCounterIndex, &value ))
+              error_return(); 
             fprintf( f, "%f,", value ); 
          } 
          else 
          { 
-            assert(false); 
+            assert(FALSE); 
          } 
       } 
 
@@ -345,6 +369,10 @@ int main(int argc, char **argv) {
    int debug=0;
    int read_bench=0;
 
+   struct settings_s settings;
+   settings.shuffle=0;
+   settings.read=0;
+   settings.memory=0;
    while ((opt = getopt(argc, argv, "g:t:s:m:d:r:h:")) != -1) {
       switch (opt) {
          case 'g':
@@ -356,9 +384,11 @@ int main(int argc, char **argv) {
             break;
          case 's':
             do_shuffle = atoi(optarg);
+            settings.shuffle=do_shuffle;
             break;
          case 'm':
             message_size = atoi(optarg)*1024*1024;
+            settings.memory = atoi(optarg);
             break;
          case 'd':
             debug = atoi(optarg);
@@ -369,6 +399,7 @@ int main(int argc, char **argv) {
          case 'r':
             read_bench = atoi(optarg);
             global_read_bench = read_bench;
+            settings.read = read_bench;
             break;
          default: /* '?' */
             usage();
@@ -513,96 +544,34 @@ int main(int argc, char **argv) {
 
       //GPUPerfAPI stuff start here
       //
-      GPA_Status GS;
-      GS=GPA_Initialize();
-      if(GS != GPA_STATUS_OK) {
-         perror("GPA_Initialize failed\n");
-         exit(1);
-      }
-      GS=GPA_OpenContext(queue);
-      if(GS != GPA_STATUS_OK) {
-         perror("GPA_OpenContext failed\n");
-         exit(1);
-      }
+
+     if(GPA_RegisterLoggingCallback(GPA_LOGGING_ERROR_AND_MESSAGE ,  MyLoggingFunction))
+        error_return();
+     if(GPA_Initialize())
+        error_return();
+
+     if(GPA_OpenContext(queue))
+        error_return();
 
       gpa_uint32 gpa_count;
-      GS=GPA_GetNumCounters(&gpa_count);
-      if(GS != GPA_STATUS_OK) {
-         perror("GPA_GetNumCounters failed\n");
-         exit(1);
-      }
-      printf("%d \n",gpa_count);
+      if(GPA_GetNumCounters(&gpa_count))
+         error_return();
+      printf("number of counters %d \n",gpa_count);
 
       for(int tt=0; tt<gpa_count; tt++) {
          const char * gpa_name;
-         GS=GPA_GetCounterName(tt, &gpa_name);
-         if(GS != GPA_STATUS_OK) {
-            perror("GPA_GetCounterName failed\n");
-            exit(1);
-         }
+         if(GPA_GetCounterName(tt, &gpa_name))
+            error_return();
          printf("%s \n",gpa_name);
       }
 
-      GS=GPA_EnableAllCounters(); 
-      if(GS != GPA_STATUS_OK) {
-         perror("GPA_EnableAllCounters failed\n");
-         exit(1);
-      }
+      if(GPA_EnableAllCounters())
+        error_return(); 
 
       gpa_uint32 numPasses;
-      GS=GPA_GetPassCount(&numPasses);
-      if(GS != GPA_STATUS_OK) {
-         perror("GPA_GetPassCount failed\n");
-         exit(1);
-      }
-      printf("numPasses = %d \n",gpa_count);
-
-      static gpa_uint32 currentWaitSessionID = 1; 
-
-      gpa_uint32 sessionID; 
-      GPA_BeginSession(&sessionID); 
-
-      for ( gpa_uint32 i = 0; i < numPasses; i++ ) 
-      { 
-         GPA_BeginPass(); 
-
-         GPA_BeginSample( 0 ); 
-         //<API function call> 
-         GPA_EndSample(); 
-
-         GPA_BeginSample( 1 ); 
-         //<API function call> 
-         GPA_EndSample(); 
-
-         GPA_EndPass(); 
-      } 
-
-      GPA_EndSession(); 
-
-      bool readyResult = false; 
-      if ( sessionID != currentWaitSessionID ) 
-      {
-         GPA_Status sessionStatus; 
-         sessionStatus = GPA_IsSessionReady( &readyResult, 
-               currentWaitSessionID ); 
-
-         while ( sessionStatus == GPA_STATUS_ERROR_SESSION_NOT_FOUND ) 
-         { 
-            // skipping a session which got overwritten 
-            currentWaitSessionID++; 
-            sessionStatus = GPA_IsSessionReady( &readyResult, 
-                  currentWaitSessionID ); 
-         } 
-      } 
-
-      if ( readyResult ) 
-      { 
-         WriteSession( currentWaitSessionID, "./CounterResults.csv" ); 
-         currentWaitSessionID++; 
-      } 
-
-      GPA_CloseContext(); 
-      GPA_Destroy();
+      if(GPA_GetPassCount(&numPasses))
+         error_return();
+      printf("numPasses = %d \n",numPasses);
 
       /* Create a buffer to hold the output data */
       //msg_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(msg), msg, &err);
@@ -706,28 +675,103 @@ int main(int argc, char **argv) {
       };
 
 
+      static gpa_uint32 currentWaitSessionID = 1; 
+      gpa_uint32 sessionID; 
+      GPA_BeginSession(&sessionID); 
+
+      for ( gpa_uint32 i = 0; i < numPasses; i++ ) 
+      {
+         if(GPA_BeginPass())
+           error_return(); 
+
+         if(GPA_BeginSample(0))
+           error_return(); 
+         /* Enqueue kernel */
+         /*err = clEnqueueTask(queue, kernel, 0, NULL, NULL);
+           if(err < 0) {
+           perror("Couldn't enqueue the kernel");
+           exit(1);   
+           }*/
+         err = clEnqueueNDRangeKernel(queue,
+               kernel,
+               1,
+               NULL,
+               &global_work_size,
+               NULL,
+               0,
+               NULL,
+               &ev_enqueue_kernel);
+
+         if(err < 0) {
+            perror("Couldn't enqueue the kernel");
+            exit(1);   
+         }
 
 
-      /* Enqueue kernel */
-      /*err = clEnqueueTask(queue, kernel, 0, NULL, NULL);
-        if(err < 0) {
-        perror("Couldn't enqueue the kernel");
-        exit(1);   
-        }*/
-      err = clEnqueueNDRangeKernel(queue,
-            kernel,
-            1,
-            NULL,
-            &global_work_size,
-            NULL,
-            0,
-            NULL,
-            &ev_enqueue_kernel);
+         if(GPA_EndSample())
+           error_return(); 
 
-      if(err < 0) {
-         perror("Couldn't enqueue the kernel");
-         exit(1);   
-      }
+         if(GPA_BeginSample(1))
+           error_return(); 
+         /* Enqueue kernel */
+         /*err = clEnqueueTask(queue, kernel, 0, NULL, NULL);
+           if(err < 0) {
+           perror("Couldn't enqueue the kernel");
+           exit(1);   
+           }*/
+         err = clEnqueueNDRangeKernel(queue,
+               kernel,
+               1,
+               NULL,
+               &global_work_size,
+               NULL,
+               0,
+               NULL,
+               &ev_enqueue_kernel);
+
+         if(err < 0) {
+            perror("Couldn't enqueue the kernel");
+            exit(1);   
+         }
+
+
+         if(GPA_EndSample())
+           error_return(); 
+
+         if(GPA_EndPass())
+           error_return(); 
+      } 
+
+      if(GPA_EndSession())
+        error_return(); 
+
+      bool readyResult = FALSE; 
+      if (sessionID == currentWaitSessionID) 
+      {
+         GPA_Status sessionStatus; 
+         sessionStatus = GPA_IsSessionReady( &readyResult, 
+               currentWaitSessionID ); 
+
+         while ( sessionStatus == GPA_STATUS_ERROR_SESSION_NOT_FOUND ) 
+         { 
+            // skipping a session which got overwritten 
+            currentWaitSessionID++; 
+            sessionStatus = GPA_IsSessionReady( &readyResult, 
+                  currentWaitSessionID ); 
+         } 
+      } 
+
+      if (readyResult) 
+      { 
+         WriteSession( currentWaitSessionID, "./CounterResults.csv",settings ); 
+         currentWaitSessionID++; 
+      } 
+
+      if(GPA_CloseContext())
+        error_return(); 
+      if(GPA_Destroy())
+         error_return();
+
 
       /* Read and print the result */
       err = clEnqueueReadBuffer(queue,
