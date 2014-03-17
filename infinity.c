@@ -64,6 +64,9 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
 
       fprintf( f, "Identifier, " ); 
       fprintf( f, "Compute Time, " ); 
+      fprintf( f, "Shuffle, " ); 
+      fprintf( f, "READ, " ); 
+      fprintf( f, "Memory Size, " ); 
 
       for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
       { 
@@ -94,10 +97,13 @@ void WriteSession( gpa_uint32 currentWaitSessionID,
 
    for (gpa_uint32 sample = 0 ; sample < sampleCount ; sample++ ) 
    {
-      fprintf( f, "session: %d; sample: %d, shuffle: %d, read: %d, memory: %d, ", currentWaitSessionID, 
-            sample, settings.shuffle, settings.read, settings.memory ); 
+      fprintf( f, "session: %d; sample: %d,  ", currentWaitSessionID, 
+            sample ); 
 
       fprintf( f, "%f, ",settings.compute_time ); 
+      fprintf( f, "%d, ",settings.shuffle ); 
+      fprintf( f, "%d, ",settings.read ); 
+      fprintf( f, "%d, ",settings.memory ); 
 
       for (gpa_uint32 counter = 0 ; counter < count ; counter++ ) 
       { 
@@ -560,22 +566,24 @@ int main(int argc, char **argv) {
       gpa_uint32 gpa_count;
       if(GPA_GetNumCounters(&gpa_count))
          error_return();
-      printf("number of counters %d \n",gpa_count);
+      //printf("number of counters %d \n",gpa_count);
 
-      for(int tt=0; tt<gpa_count; tt++) {
+      //print names of available counters
+      /*for(int tt=0; tt<gpa_count; tt++) {
          const char * gpa_name;
          if(GPA_GetCounterName(tt, &gpa_name))
             error_return();
          printf("%s \n",gpa_name);
-      }
+      }*/
 
       if(GPA_EnableAllCounters())
         error_return(); 
 
+      //number of required passes to collect counters
       gpa_uint32 numPasses;
       if(GPA_GetPassCount(&numPasses))
          error_return();
-      printf("numPasses = %d \n",numPasses);
+      //printf("numPasses = %d \n",numPasses);
 
       /* Create a buffer to hold the output data */
       //msg_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(msg), msg, &err);
