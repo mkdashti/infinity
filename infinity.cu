@@ -189,13 +189,15 @@ int main(int argc, char **argv) {
    cudaEventCreate(&start);
    cudaEventCreate(&stop);
    cudaEventRecord(start, 0);
-   if(unified)
+   if(unified) {
       infinity<<< nthreads/64, 64 >>>(message,data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
+      cudaDeviceSynchronize();
+   }
    else
       infinity<<< nthreads/64, 64 >>>(d_message,d_data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
-   cudaDeviceSynchronize();
    cudaEventRecord(stop, 0);
    cudaEventSynchronize(stop);
+
    float elapsedTime;
    cudaEventElapsedTime(&elapsedTime, start, stop);
 
