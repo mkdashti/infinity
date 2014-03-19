@@ -74,6 +74,7 @@ void shuffle(int *array, size_t n)
 void usage(void)
 {
    printf("Usage:\n");
+   printf(" -u <unified memory> (0/1)\n");
    printf(" -t <t> (number of threads)\n");
    printf(" -s <shuffle> (1/0)\n");
    printf(" -m <number of integer entries in data array in Mega>\n");
@@ -89,6 +90,7 @@ int main(int argc, char **argv) {
 
    /* Data and buffers */
    int *message, *data_array, *read_array;
+   int *d_message, *d_data_array, *d_read_array;
    //unsigned long  message_size = 1024*1024*128;  //larger than 200 sometimes makes some fuctions fail.
    unsigned long  message_size = 1024;  //larger than 200 sometimes makes some fuctions fail.
    //unsigned long checksum = 0;
@@ -97,9 +99,13 @@ int main(int argc, char **argv) {
    int do_shuffle=0;
    int debug=0;
    int read_bench=0;
+   int unified=0;
 
-   while ((opt = getopt(argc, argv, "t:s:m:d:r:h:")) != -1) {
+   while ((opt = getopt(argc, argv, "u:t:s:m:d:r:h:")) != -1) {
       switch (opt) {
+         case 'u':
+            unified = atoi(optarg);
+            break;
          case 't':
             nthreads = atoi(optarg);
             break;
@@ -134,9 +140,23 @@ int main(int argc, char **argv) {
    else
       portion_size = nthreads;
 
-   cudaMallocManaged((void**)&message, sizeof(int)*message_size);
-   cudaMallocManaged((void**)&data_array, sizeof(int)*message_size);
-   cudaMallocManaged((void**)&read_array, sizeof(int)*message_size);
+   if(unified)
+   {
+      cudaMallocManaged((void**)&message, sizeof(int)*message_size);
+      cudaMallocManaged((void**)&data_array, sizeof(int)*message_size);
+      cudaMallocManaged((void**)&read_array, sizeof(int)*message_size);
+   }
+   else
+   {
+
+      message = (int*)malloc(sizeof(int)*message_size);
+      data_array = (int*)malloc(sizeof(int)*message_size);
+      read_array = (int*)malloc(sizeof(int)*message_size);
+
+      cudaMalloc(&d_message, sizeof(int)*message_size);
+      cudaMalloc(&d_data_array, sizeof(int)*message_size);
+      cudaMalloc(&d_read_array, sizeof(int)*message_size);
+   }
 
    for(i=0; i< message_size; i++) {
       message[i]=i;
@@ -158,17 +178,34 @@ int main(int argc, char **argv) {
       data_array[i]=i;
    }
 
+   if(!unified)
+   {
+      cudaMemcpy(d_message, message, sizeof(int)*message_size, cudaMemcpyHostToDevice);
+      cudaMemcpy(d_data_array, data_array, sizeof(int)*message_size, cudaMemcpyHostToDevice);
+      cudaMemcpy(d_read_array, read_array, sizeof(int)*message_size, cudaMemcpyHostToDevice);
+   }
 
    cudaEvent_t start, stop;
    cudaEventCreate(&start);
    cudaEventCreate(&stop);
    cudaEventRecord(start, 0);
-   infinity<<< nthreads/64, 64 >>>(message,data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
+   if(unified)
+      infinity<<< nthreads/64, 64 >>>(message,data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
+   else
+      infinity<<< nthreads/64, 64 >>>(d_message,d_data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
    cudaDeviceSynchronize();
    cudaEventRecord(stop, 0);
    cudaEventSynchronize(stop);
    float elapsedTime;
    cudaEventElapsedTime(&elapsedTime, start, stop);
+
+   if(!unified)
+   {
+      cudaMemcpy(message, d_message, sizeof(int)*message_size, cudaMemcpyDeviceToHost);
+      cudaMemcpy(data_array, d_data_array, sizeof(int)*message_size, cudaMemcpyDeviceToHost);
+      cudaMemcpy(read_array, d_read_array, sizeof(int)*message_size, cudaMemcpyDeviceToHost);
+
+   }
    //Confirm that the resulting data array is correct (all values have become = 1)
    if(debug) {
       for(i=0; i<message_size; i++)
@@ -177,9 +214,21 @@ int main(int argc, char **argv) {
 
    cudaEventDestroy(start);
    cudaEventDestroy(stop);
-   cudaFree(message);
-   cudaFree(data_array);
-   cudaFree(read_array);
+   if(unified)
+   {
+      cudaFree(message);
+      cudaFree(data_array);
+      cudaFree(read_array);
+   }
+   else
+   {
+      free(message);
+      free(data_array);
+      free(read_array);
+      cudaFree(d_message);
+      cudaFree(d_data_array);
+      cudaFree(d_read_array);
+   }
    cudaDeviceReset();
 
    printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
