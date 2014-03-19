@@ -89,8 +89,8 @@ int main(int argc, char **argv) {
    int nthreads = 1024;
 
    /* Data and buffers */
-   int *message, *data_array, *read_array;
-   int *d_message, *d_data_array, *d_read_array;
+   int *message, *data_array;
+   int *d_message, *d_data_array;
    //unsigned long  message_size = 1024*1024*128;  //larger than 200 sometimes makes some fuctions fail.
    unsigned long  message_size = 1024;  //larger than 200 sometimes makes some fuctions fail.
    //unsigned long checksum = 0;
@@ -144,18 +144,15 @@ int main(int argc, char **argv) {
    {
       cudaMallocManaged((void**)&message, sizeof(int)*message_size);
       cudaMallocManaged((void**)&data_array, sizeof(int)*message_size);
-      cudaMallocManaged((void**)&read_array, sizeof(int)*message_size);
    }
    else
    {
 
       message = (int*)malloc(sizeof(int)*message_size);
       data_array = (int*)malloc(sizeof(int)*message_size);
-      read_array = (int*)malloc(sizeof(int)*message_size);
 
       cudaMalloc(&d_message, sizeof(int)*message_size);
       cudaMalloc(&d_data_array, sizeof(int)*message_size);
-      cudaMalloc(&d_read_array, sizeof(int)*message_size);
    }
 
    for(i=0; i< message_size; i++) {
@@ -182,7 +179,6 @@ int main(int argc, char **argv) {
    {
       cudaMemcpy(d_message, message, sizeof(int)*message_size, cudaMemcpyHostToDevice);
       cudaMemcpy(d_data_array, data_array, sizeof(int)*message_size, cudaMemcpyHostToDevice);
-      cudaMemcpy(d_read_array, read_array, sizeof(int)*message_size, cudaMemcpyHostToDevice);
    }
 
    cudaEvent_t start, stop;
@@ -205,7 +201,6 @@ int main(int argc, char **argv) {
    {
       cudaMemcpy(message, d_message, sizeof(int)*message_size, cudaMemcpyDeviceToHost);
       cudaMemcpy(data_array, d_data_array, sizeof(int)*message_size, cudaMemcpyDeviceToHost);
-      cudaMemcpy(read_array, d_read_array, sizeof(int)*message_size, cudaMemcpyDeviceToHost);
 
    }
    //Confirm that the resulting data array is correct (all values have become = 1)
@@ -220,16 +215,13 @@ int main(int argc, char **argv) {
    {
       cudaFree(message);
       cudaFree(data_array);
-      cudaFree(read_array);
    }
    else
    {
       free(message);
       free(data_array);
-      free(read_array);
       cudaFree(d_message);
       cudaFree(d_data_array);
-      cudaFree(d_read_array);
    }
    cudaDeviceReset();
 
