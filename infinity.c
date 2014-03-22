@@ -358,6 +358,7 @@ int main(int argc, char **argv) {
    int i;
    cl_ulong max_buffer_size;
    size_t global_work_size = 1024;
+   size_t local_work_size = 64;
    int nthreads = global_work_size;
    cl_event ev_enqueue_map_buffer, 
             ev_enqueue_kernel, 
@@ -582,7 +583,10 @@ int main(int argc, char **argv) {
          printf("%s \n",gpa_name);
       }*/
 
-      if(GPA_EnableAllCounters())
+      //if(GPA_EnableAllCounters())
+      //  error_return(); 
+
+      if(GPA_EnableCounterStr("FetchInsts")) 
         error_return(); 
 
       //number of required passes to collect counters
@@ -743,6 +747,7 @@ int main(int argc, char **argv) {
                NULL,
                &global_work_size,
                NULL,
+               //&local_work_size,
                0,
                NULL,
                &ev_enqueue_kernel);

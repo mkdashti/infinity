@@ -10,6 +10,7 @@ size_t idx = get_global_id(0);
 int temp,garbage = 0;
 int i;
 int startof_portion, endof_portion;
+int last_portion = array_size-portion_size;
 
 if(idx < nthreads) {
 
@@ -20,7 +21,7 @@ if(do_shuffle) {
    if(read_bench) {
    for(i=startof_portion; i<endof_portion ; i++)
       temp = data_array[index_array[i]];
-      if(temp < 7)
+      if(temp > -1)
          garbage++;
       }
    else {
@@ -30,13 +31,13 @@ if(do_shuffle) {
    }
 else {
    if(read_bench) {
-      for(i=0; i<=(array_size-portion_size); i=i+portion_size)
+      for(i=0; i<=last_portion; i=i+portion_size)
          temp = data_array[index_array[idx+i]];
-         if(temp < 7)
+         if(temp > -1)
             garbage++;
       }
    else {
-      for(i=0; i<=(array_size-portion_size); i=i+portion_size)
+      for(i=0; i<=last_portion; i=i+portion_size)
          data_array[index_array[idx+i]] = 1;
       }
   }
