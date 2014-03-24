@@ -6,7 +6,7 @@ CC_FLAGS += $(CUDA_ARCH_FLAGS)
 
 CC := $(CUDA_DIR)/bin/nvcc
 
-EXE = infinity
+EXE = bpt
 
 all: $(EXE)
 
