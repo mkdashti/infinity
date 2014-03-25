@@ -181,6 +181,7 @@ double diff(struct timespec start, struct timespec end)
 
 //GPU
 static int gpu_run = 1;
+int nthreads=1;
 __device__ node * gpu_find_leaf( node * root, int key) {
 	int i = 0;
 	node * c = root;
@@ -199,34 +200,36 @@ __device__ node * gpu_find_leaf( node * root, int key) {
 }
 
 
-__global__ void gpu_find(record & c, node * root, int key)
+__global__ void gpu_find(node * root, int nthreads)
 {
-   //int idx = blockDim.x*blockIdx.x +threadIdx.x;
+   int idx = blockDim.x*blockIdx.x +threadIdx.x;
 
-	int i = 0;
-   //record * c;
-	node * n = gpu_find_leaf( root, key);
-	if (n == NULL) {
-      c.invalid = true;
-      return;
-   }
-	for (i = 0; i < n->num_keys; i++)
-		if (n->keys[i] == key) break;
-	if (i == n->num_keys) {
-		c.invalid = true;
-      return;
-   }
-	else
-   {
-		c = *((record *)(n->pointers[i]));
-      c.invalid = false;
-   }
+   //printf("thread %d.\n", idx);
+   int i = 0;
+   record * c;
+   if(idx < nthreads) {
+      //node * n = gpu_find_leaf( root, key);
+      node * n = gpu_find_leaf( root, idx);
+      if (n == NULL) {
+         c=NULL;
+         return;
+      }
+      for (i = 0; i < n->num_keys; i++)
+         if (n->keys[i] == idx) break;
+      if (i == n->num_keys) {
+         c=NULL;
+         return;
+      }
+      else
+      {
+         c = (record *)(n->pointers[i]);
+      }
 
-   /*if (c == NULL)
-      printf("Record not found under key %d.\n", key);
-   else 
-      printf("Record at %lx -- key %d, value %d.\n",
-            (unsigned long)c, key, c->value);*/
+      if (c == NULL)
+        printf("Record not found under key %d.\n", idx);
+      else 
+         printf("Found key %d, value %d.\n",idx, c->value);
+   }
 }
 
 // FUNCTION PROTOTYPES.
@@ -526,26 +529,30 @@ void print_tree( node * root ) {
 void find_and_print(node * root, int key, bool verbose) {
 
    if(gpu_run) {
-      record *c;
-      cudaMallocManaged((void **)&c,sizeof(record));
+      int num_blocks=4;
+      int num_threads_per_block=nthreads/num_blocks;
+      if(num_threads_per_block ==0){
+         num_blocks=1;
+         num_threads_per_block=1;
+      }
       cudaEvent_t start, stop;
       cudaEventCreate(&start);
       cudaEventCreate(&stop);
       cudaEventRecord(start, 0);
-      gpu_find<<< 1,1 >>>(*c,root, key);
+      //gpu_find<<< 1,1 >>>(*c,root, key, nthreads);
+      gpu_find<<< num_blocks,num_threads_per_block >>>(root, nthreads);
       cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
       cudaEventRecord(stop, 0);
       cudaEventSynchronize(stop);
       float elapsedTime;
       cudaEventElapsedTime(&elapsedTime, start, stop);
-      if (c == NULL || c->invalid)
+      /*if (c == NULL || c->invalid)
          printf("Record not found under key %d.\n", key);
       else 
          printf("Record at %lx -- key %d, value %d.\n",
                (unsigned long)c, key, c->value);
-
+       */
       printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
-      cudaFree(c);
    }
 
    else
@@ -1587,6 +1594,9 @@ int main( int argc, char ** argv ) {
 	}
    if (argc > 3)
       gpu_run = atoi(argv[3]);
+   if (argc > 4)
+      nthreads = atoi(argv[4]);
+
 
 	printf("> ");
 	while (scanf("%c", &instruction) != EOF) {
