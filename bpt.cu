@@ -1,5 +1,6 @@
 /* 
- *  bpt.c  
+ *  bpt.cu... see original licence below. I ported the b+tree search to cuda 6.0 (unified memory)
+ *  Modifications by Mohammad Dashti 2014 
  */
 #define Version "1.12"
 /*
@@ -88,6 +89,7 @@
  */
 typedef struct record {
 	int value;
+   bool invalid;
 } record;
 
 /* Type representing a node in the B+ tree.
@@ -157,7 +159,28 @@ node * queue = NULL;
 bool verbose_output = false;
 
 
+#include <sys/time.h>
+#include <time.h>
+double diff(struct timespec start, struct timespec end)
+{
+   struct timespec temp;
+   if ((end.tv_nsec-start.tv_nsec)<0) {
+      temp.tv_sec = end.tv_sec-start.tv_sec-1;
+      temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+   } else {
+      temp.tv_sec = end.tv_sec-start.tv_sec;
+      temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+   }
+   if(temp.tv_sec)
+      return (double)(temp.tv_sec*1000000000+temp.tv_nsec);
+   else
+      return (double)temp.tv_nsec;
+
+}
+
+
 //GPU
+static int gpu_run = 1;
 __device__ node * gpu_find_leaf( node * root, int key) {
 	int i = 0;
 	node * c = root;
@@ -176,29 +199,34 @@ __device__ node * gpu_find_leaf( node * root, int key) {
 }
 
 
-__global__ void gpu_find(node * root, int key)
+__global__ void gpu_find(record & c, node * root, int key)
 {
    //int idx = blockDim.x*blockIdx.x +threadIdx.x;
 
 	int i = 0;
-   record * c;
+   //record * c;
 	node * n = gpu_find_leaf( root, key);
 	if (n == NULL) {
-      c = NULL;
+      c.invalid = true;
+      return;
    }
 	for (i = 0; i < n->num_keys; i++)
 		if (n->keys[i] == key) break;
 	if (i == n->num_keys) {
-		c = NULL;
+		c.invalid = true;
+      return;
    }
 	else
-		c = (record *)n->pointers[i];
+   {
+		c = *((record *)(n->pointers[i]));
+      c.invalid = false;
+   }
 
-   if (c == NULL)
+   /*if (c == NULL)
       printf("Record not found under key %d.\n", key);
    else 
       printf("Record at %lx -- key %d, value %d.\n",
-            (unsigned long)c, key, c->value);
+            (unsigned long)c, key, c->value);*/
 }
 
 // FUNCTION PROTOTYPES.
@@ -496,27 +524,45 @@ void print_tree( node * root ) {
  * appropriate message to stdout.
  */
 void find_and_print(node * root, int key, bool verbose) {
-	//record * r = find(root, key, verbose);
-	//record * r;
 
-   cudaEvent_t start, stop;
-   cudaEventCreate(&start);
-   cudaEventCreate(&stop);
-   cudaEventRecord(start, 0);
-   gpu_find<<< 1,1 >>>(root, key);
-   cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
-   cudaEventRecord(stop, 0);
-   cudaEventSynchronize(stop);
-   float elapsedTime;
-   cudaEventElapsedTime(&elapsedTime, start, stop);
-   printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
+   if(gpu_run) {
+      record *c;
+      cudaMallocManaged((void **)&c,sizeof(record));
+      cudaEvent_t start, stop;
+      cudaEventCreate(&start);
+      cudaEventCreate(&stop);
+      cudaEventRecord(start, 0);
+      gpu_find<<< 1,1 >>>(*c,root, key);
+      cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
+      cudaEventRecord(stop, 0);
+      cudaEventSynchronize(stop);
+      float elapsedTime;
+      cudaEventElapsedTime(&elapsedTime, start, stop);
+      if (c == NULL || c->invalid)
+         printf("Record not found under key %d.\n", key);
+      else 
+         printf("Record at %lx -- key %d, value %d.\n",
+               (unsigned long)c, key, c->value);
 
+      printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
+      cudaFree(c);
+   }
 
-   //if (r == NULL)
-	//	printf("Record not found under key %d.\n", key);
-	//else 
-	//	printf("Record at %lx -- key %d, value %d.\n",
-	//			(unsigned long)r, key, r->value);
+   else
+   {
+      struct timespec start_time, end_time;
+
+      clock_gettime(CLOCK_REALTIME, &start_time);
+      record * r = find(root, key, verbose);
+      clock_gettime(CLOCK_REALTIME, &end_time);
+      if (r == NULL)
+         printf("Record not found under key %d.\n", key);
+      else 
+         printf("Record at %lx -- key %d, value %d.\n",
+               (unsigned long)r, key, r->value);
+       printf("CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
+
+   }
 }
 
 
@@ -1539,6 +1585,8 @@ int main( int argc, char ** argv ) {
 		fclose(fp);
 		print_tree(root);
 	}
+   if (argc > 3)
+      gpu_run = atoi(argv[3]);
 
 	printf("> ");
 	while (scanf("%c", &instruction) != EOF) {
