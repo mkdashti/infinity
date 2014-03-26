@@ -232,6 +232,8 @@ __global__ void gpu_find(node * root, int nthreads)
    }
 }
 
+
+
 // FUNCTION PROTOTYPES.
 
 // Output and utility.
@@ -281,6 +283,70 @@ node * redistribute_nodes(node * root, node * n, node * neighbor, int neighbor_i
 		int k_prime_index, int k_prime);
 node * delete_entry( node * root, node * n, int key, void * pointer );
 node * delete_node( node * root, int key );
+
+
+//PTHREAD stuff
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <sched.h>
+#include <sys/sysinfo.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h> 
+
+static pid_t gettid(void) {                                                                      
+   return syscall(__NR_gettid);
+}
+
+void set_affinity(int tid, int core_id) {
+   cpu_set_t mask;
+   CPU_ZERO(&mask);
+   CPU_SET(core_id, &mask);
+
+   int r = sched_setaffinity(tid, sizeof(mask), &mask);                                                                  
+   if (r < 0) {
+      fprintf(stderr, "couldn't set affinity for %d\n", core_id);
+      exit(1);
+   }
+}
+
+
+typedef struct {                                                                                                        
+   int id;
+   node * root;
+} parm;
+
+
+void * pthread_find( void *arg ) {
+	
+   parm *p=(parm *)arg;
+   int tid = gettid();
+   set_affinity(tid, (p->id)%get_nprocs());
+
+
+   node *root = p->root;
+   record *r;
+
+   int i = 0;
+	node * c = find_leaf( root, p->id, 0);
+	if (c == NULL)  r=NULL;
+	for (i = 0; i < c->num_keys; i++)
+		if (c->keys[i] == p->id) break;
+	if (i == c->num_keys) 
+		r=NULL;
+	else
+		r=(record *)c->pointers[i];
+
+   if (r == NULL)
+      printf("Record not found under key %d.\n", p->id);
+   else 
+      printf("key %d, value %d.\n", p->id, r->value);
+
+   return 0;
+}
 
 
 
@@ -559,15 +625,50 @@ void find_and_print(node * root, int key, bool verbose) {
    {
       struct timespec start_time, end_time;
 
+      //record * r = find(root, key, verbose);
+
+      pthread_t *threads;
+      pthread_attr_t attr; 
+      parm *p;
+      threads=(pthread_t *)malloc(nthreads * sizeof(pthread_t));
+      if(threads == NULL) {
+         printf("ERROR malloc failed to create CPU threads\n");
+         exit(1);
+      }
+      pthread_attr_init(&attr);
+      p=(parm *)malloc(nthreads * sizeof(parm));
+
       clock_gettime(CLOCK_REALTIME, &start_time);
-      record * r = find(root, key, verbose);
+      int j;
+      for (j=0; j<nthreads; j++)
+      {
+         p[j].id=j;
+         p[j].root = root;
+         if(pthread_create(&threads[j], &attr, pthread_find, (void *)(p+j))!=0)
+         {
+            printf("ERROR creating threads\n");
+            exit(1);
+         }
+      }
+
+      for (j=0; j<nthreads; j++)
+      {
+         if(pthread_join(threads[j],NULL)!=0) {
+            printf("ERROR in joing threads\n");
+            exit(1);
+         }
+      }
+
       clock_gettime(CLOCK_REALTIME, &end_time);
-      if (r == NULL)
+      pthread_attr_destroy(&attr);
+      free(p);
+
+      /*if (r == NULL)
          printf("Record not found under key %d.\n", key);
       else 
          printf("Record at %lx -- key %d, value %d.\n",
-               (unsigned long)r, key, r->value);
-       printf("CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
+               (unsigned long)r, key, r->value);*/
+      printf("CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
 
    }
 }
@@ -1574,9 +1675,9 @@ int main( int argc, char ** argv ) {
 		}
 	}
 
-	license_notice();
-	usage_1();  
-	usage_2();
+	//license_notice();
+	//usage_1();  
+	//usage_2();
 
 	if (argc > 2) {
 		input_file = argv[2];
@@ -1590,7 +1691,7 @@ int main( int argc, char ** argv ) {
 			root = insert(root, input, input);
 		}
 		fclose(fp);
-		print_tree(root);
+		//print_tree(root);
 	}
    if (argc > 3)
       gpu_run = atoi(argv[3]);

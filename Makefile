@@ -2,7 +2,7 @@ PROJ=infinity
 
 CC=gcc
 
-CFLAGS=-std=c99 -Wall -DUNIX -g -DDEBUG
+CFLAGS=-std=c99 -Wall -DUNIX -g -DDEBUG -lpthread
 
 # Check for 32-bit vs 64-bit
 PROC_TYPE = $(strip $(shell uname -m | grep 64))
