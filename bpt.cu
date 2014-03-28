@@ -600,7 +600,9 @@ void find_and_print(node * root, int key, bool verbose) {
 
    if(type_run == 1) {
       int num_blocks=32;
+      //int num_blocks=nthreads;
       int num_threads_per_block=nthreads/num_blocks;
+      //int num_threads_per_block=1;
       if(num_threads_per_block ==0){
          num_blocks=1;
          num_threads_per_block=nthreads;
@@ -695,10 +697,10 @@ void find_and_print(node * root, int key, bool verbose) {
       for(int k=0; k<nthreads; k++) {
          record * r = find(root, k, verbose);
          if (r == NULL)
-            printf("Record not found under key %d.\n", key);
+            printf("Record not found under key %d.\n", k);
          else 
-            printf("Record at %lx -- key %d, value %d.\n",
-                  (unsigned long)r, key, r->value);
+            //printf("Record at %lx -- key %d, value %d.\n",(unsigned long)r, key, r->value);
+            printf("key %d, value %d.\n",k, r->value);
          clock_gettime(CLOCK_REALTIME, &end_time);
       }
       printf("serial CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
@@ -1746,7 +1748,7 @@ int main( int argc, char ** argv ) {
 			break;
 		case 'f':
 		case 'p':
-			scanf("%d", &input);
+			scanf("%d %d", &input, &nthreads);
 			find_and_print(root, input, instruction == 'p');
 			break;
 		case 'r':
