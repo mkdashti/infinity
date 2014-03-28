@@ -180,7 +180,7 @@ double diff(struct timespec start, struct timespec end)
 
 
 //GPU
-static int gpu_run = 1;
+static int type_run = 1;
 int nthreads=1;
 __device__ node * gpu_find_leaf( node * root, int key) {
 	int i = 0;
@@ -325,26 +325,28 @@ void * pthread_find( void *arg ) {
    parm *p=(parm *)arg;
    int tid = gettid();
    set_affinity(tid, (p->id)%get_nprocs());
-
+   int portion_size = nthreads/get_nprocs();
 
    node *root = p->root;
    record *r;
+   node *c;
 
-   int i = 0;
-	node * c = find_leaf( root, p->id, 0);
-	if (c == NULL)  r=NULL;
-	for (i = 0; i < c->num_keys; i++)
-		if (c->keys[i] == p->id) break;
-	if (i == c->num_keys) 
-		r=NULL;
-	else
-		r=(record *)c->pointers[i];
+   for(int k=(p->id)*portion_size;k<((p->id)+1)*portion_size;k++) {
+      int i = 0;
+      c = find_leaf( root, k, 0);
+      if (c == NULL)  r=NULL;
+      for (i = 0; i < c->num_keys; i++)
+         if (c->keys[i] == k) break;
+      if (i == c->num_keys) 
+         r=NULL;
+      else
+         r=(record *)c->pointers[i];
 
-   if (r == NULL)
-      printf("Record not found under key %d.\n", p->id);
-   else 
-      printf("key %d, value %d.\n", p->id, r->value);
-
+      if (r == NULL)
+         printf("Record not found under key %d.\n", k);
+      else 
+         printf("key %d, value %d.\n", k, r->value);
+   }
    return 0;
 }
 
@@ -594,8 +596,8 @@ void print_tree( node * root ) {
  */
 void find_and_print(node * root, int key, bool verbose) {
 
-   if(gpu_run) {
-      int num_blocks=4;
+   if(type_run == 1) {
+      int num_blocks=64;
       int num_threads_per_block=nthreads/num_blocks;
       if(num_threads_per_block ==0){
          num_blocks=1;
@@ -621,7 +623,7 @@ void find_and_print(node * root, int key, bool verbose) {
       printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
    }
 
-   else
+   else if(type_run == 2)
    {
       struct timespec start_time, end_time;
 
@@ -640,7 +642,7 @@ void find_and_print(node * root, int key, bool verbose) {
 
       clock_gettime(CLOCK_REALTIME, &start_time);
       int j;
-      for (j=0; j<nthreads; j++)
+      for (j=0; j<get_nprocs(); j++)
       {
          p[j].id=j;
          p[j].root = root;
@@ -651,7 +653,7 @@ void find_and_print(node * root, int key, bool verbose) {
          }
       }
 
-      for (j=0; j<nthreads; j++)
+      for (j=0; j<get_nprocs(); j++)
       {
          if(pthread_join(threads[j],NULL)!=0) {
             printf("ERROR in joing threads\n");
@@ -668,8 +670,24 @@ void find_and_print(node * root, int key, bool verbose) {
       else 
          printf("Record at %lx -- key %d, value %d.\n",
                (unsigned long)r, key, r->value);*/
-      printf("CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
+      printf("pthread CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
 
+   }
+   else {
+
+      struct timespec start_time, end_time;
+
+      clock_gettime(CLOCK_REALTIME, &start_time);
+      for(int k=0; k<nthreads; k++) {
+         record * r = find(root, k, verbose);
+         if (r == NULL)
+            printf("Record not found under key %d.\n", key);
+         else 
+            printf("Record at %lx -- key %d, value %d.\n",
+                  (unsigned long)r, key, r->value);
+         clock_gettime(CLOCK_REALTIME, &end_time);
+      }
+      printf("serial CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
    }
 }
 
@@ -1694,7 +1712,7 @@ int main( int argc, char ** argv ) {
 		//print_tree(root);
 	}
    if (argc > 3)
-      gpu_run = atoi(argv[3]);
+      type_run = atoi(argv[3]);
    if (argc > 4)
       nthreads = atoi(argv[4]);
 
