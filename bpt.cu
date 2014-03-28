@@ -326,6 +326,8 @@ void * pthread_find( void *arg ) {
    int tid = gettid();
    set_affinity(tid, (p->id)%get_nprocs());
    int portion_size = nthreads/get_nprocs();
+   if(!portion_size)
+      portion_size=1;
 
    node *root = p->root;
    record *r;
@@ -597,11 +599,11 @@ void print_tree( node * root ) {
 void find_and_print(node * root, int key, bool verbose) {
 
    if(type_run == 1) {
-      int num_blocks=64;
+      int num_blocks=32;
       int num_threads_per_block=nthreads/num_blocks;
       if(num_threads_per_block ==0){
          num_blocks=1;
-         num_threads_per_block=1;
+         num_threads_per_block=nthreads;
       }
       cudaEvent_t start, stop;
       cudaEventCreate(&start);
@@ -640,9 +642,21 @@ void find_and_print(node * root, int key, bool verbose) {
       pthread_attr_init(&attr);
       p=(parm *)malloc(nthreads * sizeof(parm));
 
+      // in case the number of searches is less than the number of cores, make the number of threads
+      // launched equeal to the number of searches
+      int num_cores = get_nprocs();
+      if(nthreads/num_cores == 0)
+         num_cores = nthreads;
+      else {
+         if(nthreads%num_cores!=0) {
+            printf("number of searches should be dividable on the number of cores\n");
+            exit(1);
+         }
+      }
+
       clock_gettime(CLOCK_REALTIME, &start_time);
       int j;
-      for (j=0; j<get_nprocs(); j++)
+      for (j=0; j<num_cores; j++)
       {
          p[j].id=j;
          p[j].root = root;
@@ -653,7 +667,7 @@ void find_and_print(node * root, int key, bool verbose) {
          }
       }
 
-      for (j=0; j<get_nprocs(); j++)
+      for (j=0; j<num_cores; j++)
       {
          if(pthread_join(threads[j],NULL)!=0) {
             printf("ERROR in joing threads\n");
