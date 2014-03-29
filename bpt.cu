@@ -227,8 +227,8 @@ __global__ void gpu_find(node * root, int nthreads)
 
       if (c == NULL)
         printf("Record not found under key %d.\n", idx);
-      else 
-         printf("Found key %d, value %d.\n",idx, c->value);
+    //  else 
+    //     printf("Found key %d, value %d.\n",idx, c->value);
    }
 }
 
@@ -346,8 +346,8 @@ void * pthread_find( void *arg ) {
 
       if (r == NULL)
          printf("Record not found under key %d.\n", k);
-      else 
-         printf("key %d, value %d.\n", k, r->value);
+  //    else 
+  //       printf("key %d, value %d.\n", k, r->value);
    }
    return 0;
 }
@@ -696,11 +696,11 @@ void find_and_print(node * root, int key, bool verbose) {
       clock_gettime(CLOCK_REALTIME, &start_time);
       for(int k=0; k<nthreads; k++) {
          record * r = find(root, k, verbose);
-         if (r == NULL)
-            printf("Record not found under key %d.\n", k);
-         else 
+      //   if (r == NULL)
+      //      printf("Record not found under key %d.\n", k);
+      //   else 
             //printf("Record at %lx -- key %d, value %d.\n",(unsigned long)r, key, r->value);
-            printf("key %d, value %d.\n",k, r->value);
+      //      printf("key %d, value %d.\n",k, r->value);
          clock_gettime(CLOCK_REALTIME, &end_time);
       }
       printf("serial CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
