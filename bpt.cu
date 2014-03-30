@@ -327,29 +327,37 @@ void * pthread_find( void *arg ) {
    parm *p=(parm *)arg;
    int tid = gettid();
    set_affinity(tid, (p->id)%get_nprocs());
-   int portion_size = nthreads/get_nprocs();
+   int portion_size;
+   if(nthreads <= num_of_nodes) portion_size=nthreads/get_nprocs();
+   else portion_size=num_of_nodes/get_nprocs();
+   int iterations = (nthreads/num_of_nodes);
+   if(!iterations) iterations = 1;
    if(!portion_size)
       portion_size=1;
+
+   printf("iterations %d, num_of_nodes %d, portion_size %d\n",iterations, num_of_nodes, portion_size);
 
    node *root = p->root;
    record *r;
    node *c;
 
-   for(int k=(p->id)*portion_size;k<((p->id)+1)*portion_size;k++) {
-      int i = 0;
-      c = find_leaf( root, k, 0);
-      if (c == NULL)  r=NULL;
-      for (i = 0; i < c->num_keys; i++)
-         if (c->keys[i] == k) break;
-      if (i == c->num_keys) 
-         r=NULL;
-      else
-         r=(record *)c->pointers[i];
+   for(int i=0; i< iterations; i++) {
+      for(int k=(p->id)*portion_size;k<((p->id)+1)*portion_size;k++) {
+         int i = 0;
+         c = find_leaf( root, k, 0);
+         if (c == NULL)  r=NULL;
+         for (i = 0; i < c->num_keys; i++)
+            if (c->keys[i] == k) break;
+         if (i == c->num_keys) 
+            r=NULL;
+         else
+            r=(record *)c->pointers[i];
 
-      if (r == NULL)
-         printf("Record not found under key %d.\n", k);
-  //    else 
-  //       printf("key %d, value %d.\n", k, r->value);
+         if (r == NULL)
+            printf("Record not found under key %d.\n", k);
+         //    else 
+         //       printf("key %d, value %d.\n", k, r->value);
+      }
    }
    return 0;
 }
@@ -664,12 +672,12 @@ void find_and_print(node * root, int key, bool verbose) {
       int num_cores = get_nprocs();
       if(nthreads/num_cores == 0)
          num_cores = nthreads;
-      else {
-         if(nthreads%num_cores!=0) {
-            printf("number of searches should be dividable on the number of cores\n");
-            exit(1);
-         }
-      }
+      //else {
+      //   if(nthreads%num_cores!=0) {
+      //      printf("number of searches should be dividable on the number of cores\n");
+      //      exit(1);
+      //   }
+      //}
 
       clock_gettime(CLOCK_REALTIME, &start_time);
       int j;
