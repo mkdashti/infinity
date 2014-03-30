@@ -332,10 +332,9 @@ void * pthread_find( void *arg ) {
    else portion_size=num_of_nodes/get_nprocs();
    int iterations = (nthreads/num_of_nodes);
    if(!iterations) iterations = 1;
-   if(!portion_size)
-      portion_size=1;
+   if(!portion_size) portion_size=1;
 
-   printf("iterations %d, num_of_nodes %d, portion_size %d\n",iterations, num_of_nodes, portion_size);
+   //printf("iterations %d, num_of_nodes %d, portion_size %d\n",iterations, num_of_nodes, portion_size);
 
    node *root = p->root;
    record *r;
@@ -609,13 +608,13 @@ void print_tree( node * root ) {
 void find_and_print(node * root, int key, bool verbose) {
 
    if(type_run == 1) {
-      int num_blocks=65535;
+      int num_blocks=65536;
       //int num_blocks=nthreads;
       int num_threads_per_block=nthreads/num_blocks;
       //int num_threads_per_block=1;
      if(nthreads == 1){
-         num_blocks=1;
-         num_threads_per_block=nthreads;
+         num_blocks= 1;
+         num_threads_per_block=1;
       }
       else if(num_threads_per_block == 0 && nthreads >= 64) {
          num_blocks = 64;
@@ -629,7 +628,10 @@ void find_and_print(node * root, int key, bool verbose) {
          printf("ERROR: number of threads per block can't exceed 1024\n");
          exit(1);
       }
-     
+    
+
+      if(nthreads > num_of_nodes)
+        nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct 
       cudaEvent_t start, stop;
       cudaEventCreate(&start);
       cudaEventCreate(&stop);
@@ -697,6 +699,7 @@ void find_and_print(node * root, int key, bool verbose) {
          if(pthread_join(threads[j],NULL)!=0) {
             printf("ERROR in joing threads\n");
             exit(1);
+
          }
       }
 
