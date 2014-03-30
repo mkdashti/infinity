@@ -179,6 +179,7 @@ double diff(struct timespec start, struct timespec end)
 }
 
 
+static int num_of_nodes=0; //used to know how many nodes exist in the b+tree
 //GPU
 static int type_run = 1;
 int nthreads=1;
@@ -200,22 +201,23 @@ __device__ node * gpu_find_leaf( node * root, int key) {
 }
 
 
-__global__ void gpu_find(node * root, int nthreads)
+__global__ void gpu_find(node * root, int nthreads, int num_nodes)
 {
    int idx = blockDim.x*blockIdx.x +threadIdx.x;
 
    //printf("thread %d.\n", idx);
    int i = 0;
    record * c;
+   int key = idx%num_nodes;
    if(idx < nthreads) {
       //node * n = gpu_find_leaf( root, key);
-      node * n = gpu_find_leaf( root, idx);
+      node * n = gpu_find_leaf( root, key);
       if (n == NULL) {
          c=NULL;
          return;
       }
       for (i = 0; i < n->num_keys; i++)
-         if (n->keys[i] == idx) break;
+         if (n->keys[i] == key) break;
       if (i == n->num_keys) {
          c=NULL;
          return;
@@ -226,9 +228,9 @@ __global__ void gpu_find(node * root, int nthreads)
       }
 
       if (c == NULL)
-        printf("Record not found under key %d.\n", idx);
+        printf("Record not found under key %d.\n", key);
     //  else 
-    //     printf("Found key %d, value %d.\n",idx, c->value);
+    //     printf("Found key %d, value %d.\n",key, c->value);
    }
 }
 
@@ -599,20 +601,33 @@ void print_tree( node * root ) {
 void find_and_print(node * root, int key, bool verbose) {
 
    if(type_run == 1) {
-      int num_blocks=32;
+      int num_blocks=65535;
       //int num_blocks=nthreads;
       int num_threads_per_block=nthreads/num_blocks;
       //int num_threads_per_block=1;
-      if(num_threads_per_block ==0){
+     if(nthreads == 1){
          num_blocks=1;
          num_threads_per_block=nthreads;
       }
+      else if(num_threads_per_block == 0 && nthreads >= 64) {
+         num_blocks = 64;
+         num_threads_per_block = nthreads/num_blocks;
+      }
+     else {
+         num_blocks = nthreads;
+         num_threads_per_block = 1;
+     }
+      if(num_threads_per_block > 1024){
+         printf("ERROR: number of threads per block can't exceed 1024\n");
+         exit(1);
+      }
+     
       cudaEvent_t start, stop;
       cudaEventCreate(&start);
       cudaEventCreate(&stop);
       cudaEventRecord(start, 0);
       //gpu_find<<< 1,1 >>>(*c,root, key, nthreads);
-      gpu_find<<< num_blocks,num_threads_per_block >>>(root, nthreads);
+      gpu_find<<< num_blocks,num_threads_per_block >>>(root, nthreads, num_of_nodes);
       cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
       cudaEventRecord(stop, 0);
       cudaEventSynchronize(stop);
@@ -695,9 +710,9 @@ void find_and_print(node * root, int key, bool verbose) {
 
       clock_gettime(CLOCK_REALTIME, &start_time);
       for(int k=0; k<nthreads; k++) {
-         record * r = find(root, k, verbose);
-      //   if (r == NULL)
-      //      printf("Record not found under key %d.\n", k);
+         record * r = find(root, k%num_of_nodes, verbose);
+         if (r == NULL)
+            printf("Record not found under key %d.\n", k%num_of_nodes);
       //   else 
             //printf("Record at %lx -- key %d, value %d.\n",(unsigned long)r, key, r->value);
       //      printf("key %d, value %d.\n",k, r->value);
@@ -1723,6 +1738,7 @@ int main( int argc, char ** argv ) {
 		while (!feof(fp)) {
 			fscanf(fp, "%d\n", &input);
 			root = insert(root, input, input);
+         num_of_nodes++;
 		}
 		fclose(fp);
 		//print_tree(root);
