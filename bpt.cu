@@ -621,17 +621,17 @@ void find_and_print(node * root, int key, bool verbose) {
          num_threads_per_block = nthreads/num_blocks;
       }
      else {
-         num_blocks = nthreads;
-         num_threads_per_block = 1;
+         //num_blocks = nthreads;
+         //num_threads_per_block = 1;
      }
       if(num_threads_per_block > 1024){
-         printf("ERROR: number of threads per block can't exceed 1024\n");
          exit(1);
       }
     
+      printf("Number of blocks:%d, Number of threads per block:%d\n",num_blocks,num_threads_per_block);
 
-      if(nthreads > num_of_nodes)
-        nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct 
+      //if(nthreads > num_of_nodes)
+        //nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct 
       cudaEvent_t start, stop;
       cudaEventCreate(&start);
       cudaEventCreate(&stop);
