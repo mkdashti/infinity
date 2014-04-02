@@ -620,14 +620,16 @@ void find_and_print(node * root, int key, bool verbose) {
          num_blocks = 64;
          num_threads_per_block = nthreads/num_blocks;
       }
-     else {
-         //num_blocks = nthreads;
-         //num_threads_per_block = 1;
+     else if(num_threads_per_block == 0 && nthreads < 64){
+         num_blocks = nthreads;
+         num_threads_per_block = 1;
      }
-      if(num_threads_per_block > 1024){
-         exit(1);
-      }
-    
+     else {}
+
+     if(num_threads_per_block > 1024){
+        exit(1);
+     }
+
       printf("Number of blocks:%d, Number of threads per block:%d\n",num_blocks,num_threads_per_block);
 
       //if(nthreads > num_of_nodes)
