@@ -186,8 +186,8 @@ int main(int argc, char **argv) {
    cudaEventCreate(&stop);
    cudaEventRecord(start, 0);
    if(unified) {
-      //infinity<<< nthreads/64, 64 >>>(message,data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
-      infinity<<< 64, nthreads/64 >>>(d_message,d_data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
+      infinity<<< nthreads/64, 64 >>>(message,data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
+      //infinity<<< 64, nthreads/64 >>>(d_message,d_data_array,message_size,nthreads,portion_size,do_shuffle,read_bench);
       cudaDeviceSynchronize();
    }
    else
