@@ -608,10 +608,9 @@ void print_tree( node * root ) {
 void find_and_print(node * root, int key, bool verbose) {
 
    if(type_run == 1) {
-      int num_blocks=65536;
-      //int num_blocks=nthreads;
+      //int num_blocks=65536;
+      int num_blocks=64;
       int num_threads_per_block=nthreads/num_blocks;
-      //int num_threads_per_block=1;
      if(nthreads == 1){
          num_blocks= 1;
          num_threads_per_block=1;
