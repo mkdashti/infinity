@@ -181,7 +181,7 @@ double diff(struct timespec start, struct timespec end)
 
 static int num_of_nodes=0; //used to know how many nodes exist in the b+tree
 //GPU
-static int type_run = 1;
+static int type_run = 1; //1 GPU, 2 pthreads, 0 serial
 int nthreads=1;
 __device__ node * gpu_find_leaf( node * root, int key) {
 	int i = 0;
@@ -857,10 +857,12 @@ int cut( int length ) {
  * to which a key refers.
  */
 record * make_record(int value) {
-	//record * new_record = (record *)malloc(sizeof(record));
-	record * new_record;
-   cudaMallocManaged((void **)&new_record,sizeof(record));
-
+   record * new_record;
+   if(type_run != 1)
+      new_record = (record *)malloc(sizeof(record));
+   else {
+      cudaMallocManaged((void **)&new_record,sizeof(record));
+   }
 	if (new_record == NULL) {
 		perror("Record creation.");
 		exit(EXIT_FAILURE);
@@ -877,21 +879,27 @@ record * make_record(int value) {
  */
 node * make_node( void ) {
 	node * new_node;
-	//new_node = (node *)malloc(sizeof(node));
-   cudaMallocManaged((void **)&new_node,sizeof(node));
+   if(type_run != 1)
+      new_node = (node *)malloc(sizeof(node));
+   else
+      cudaMallocManaged((void **)&new_node,sizeof(node));
 
 	if (new_node == NULL) {
 		perror("Node creation.");
 		exit(EXIT_FAILURE);
 	}
-	//new_node->keys = (int *)malloc( (order - 1) * sizeof(int) );
-	cudaMallocManaged((void **)&new_node->keys, (order - 1) * sizeof(int) );
+   if(type_run != 1)
+      new_node->keys = (int *)malloc( (order - 1) * sizeof(int) );
+   else
+      cudaMallocManaged((void **)&new_node->keys, (order - 1) * sizeof(int) );
 	if (new_node->keys == NULL) {
 		perror("New node keys array.");
 		exit(EXIT_FAILURE);
 	}
-	//new_node->pointers = (void **)malloc( order * sizeof(void *) );
-	cudaMallocManaged( (void **)&(new_node->pointers),order * sizeof(void *) );
+   if(type_run != 1)
+      new_node->pointers = (void **)malloc( order * sizeof(void *) );
+   else
+      cudaMallocManaged( (void **)&(new_node->pointers),order * sizeof(void *) );
 	if (new_node->pointers == NULL) {
 		perror("New node pointers array.");
 		exit(EXIT_FAILURE);
@@ -963,15 +971,20 @@ node * insert_into_leaf_after_splitting(node * root, node * leaf, int key, recor
 
 	new_leaf = make_leaf();
 
-	//temp_keys = (int *)malloc( order * sizeof(int) );
-	cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
+
+   if(type_run != 1)
+      temp_keys = (int *)malloc( order * sizeof(int) );
+   else
+      cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
 	if (temp_keys == NULL) {
 		perror("Temporary keys array.");
 		exit(EXIT_FAILURE);
 	}
 
-	//temp_pointers = (void **)malloc( order * sizeof(void *) );
-	cudaMallocManaged((void **)&temp_pointers, order * sizeof(void *) );
+   if(type_run != 1)
+      temp_pointers = (void **)malloc( order * sizeof(void *) );
+   else
+      cudaMallocManaged((void **)&temp_pointers, order * sizeof(void *) );
 	if (temp_pointers == NULL) {
 		perror("Temporary pointers array.");
 		exit(EXIT_FAILURE);
@@ -1067,14 +1080,18 @@ node * insert_into_node_after_splitting(node * root, node * old_node, int left_i
 	 * the other half to the new.
 	 */
 
-	//temp_pointers = (node **)malloc( (order + 1) * sizeof(node *) );
-	cudaMallocManaged((void **)&temp_pointers, (order + 1) * sizeof(node *) );
+   if(type_run != 1)
+      temp_pointers = (node **)malloc( (order + 1) * sizeof(node *) );
+   else
+      cudaMallocManaged((void **)&temp_pointers, (order + 1) * sizeof(node *) );
 	if (temp_pointers == NULL) {
 		perror("Temporary pointers array for splitting nodes.");
 		exit(EXIT_FAILURE);
 	}
-	//temp_keys = (int *)malloc( order * sizeof(int) );
-	cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
+   if(type_run != 1)
+      temp_keys = (int *)malloc( order * sizeof(int) );
+   else
+      cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
 	if (temp_keys == NULL) {
 		perror("Temporary keys array for splitting nodes.");
 		exit(EXIT_FAILURE);
@@ -1721,7 +1738,7 @@ int main( int argc, char ** argv ) {
 	char * input_file;
 	FILE * fp;
 	node * root;
-	int input, range2;
+	int input=0, range2;
 	char instruction;
 	char license_part;
 
@@ -1762,8 +1779,7 @@ int main( int argc, char ** argv ) {
       nthreads = atoi(argv[4]);
 
 
-	printf("> ");
-	while (scanf("%c", &instruction) != EOF) {
+      instruction='f';
 		switch (instruction) {
 		case 'd':
 			scanf("%d", &input);
@@ -1777,7 +1793,7 @@ int main( int argc, char ** argv ) {
 			break;
 		case 'f':
 		case 'p':
-			scanf("%d %d", &input, &nthreads);
+			//scanf("%d %d", &input, &nthreads);
 			find_and_print(root, input, instruction == 'p');
 			break;
 		case 'r':
@@ -1827,10 +1843,6 @@ int main( int argc, char ** argv ) {
 			usage_2();
 			break;
 		}
-		while (getchar() != (int)'\n');
-		printf("> ");
-	}
-	printf("\n");
 
 	return EXIT_SUCCESS;
 }
