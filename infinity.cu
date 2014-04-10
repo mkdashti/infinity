@@ -134,6 +134,12 @@ int main(int argc, char **argv) {
       exit(1);
    }  
 
+
+   cudaDeviceSetLimit(cudaLimitMallocHeapSize,128*(1 << 20));
+   size_t heapsize=0;
+   cudaDeviceGetLimit(&heapsize, cudaLimitMallocHeapSize);
+   printf("Heap size found to be %d KB\n",(int)heapsize/1024); 
+
    unsigned long portion_size;
    if (do_shuffle) 
       portion_size = message_size/nthreads;
