@@ -1758,6 +1758,8 @@ int main( int argc, char ** argv ) {
 	//usage_1();  
 	//usage_2();
 
+   type_run = atoi(argv[3]);
+   nthreads = atoi(argv[4]);
 	if (argc > 2) {
 		input_file = argv[2];
 		fp = fopen(input_file, "r");
@@ -1773,11 +1775,6 @@ int main( int argc, char ** argv ) {
 		fclose(fp);
 		//print_tree(root);
 	}
-   if (argc > 3)
-      type_run = atoi(argv[3]);
-   if (argc > 4)
-      nthreads = atoi(argv[4]);
-
 
       instruction='f';
 		switch (instruction) {
