@@ -182,6 +182,7 @@ double diff(struct timespec start, struct timespec end)
 static int num_of_nodes=0; //used to know how many nodes exist in the b+tree
 //GPU
 static int type_run = 1; //1 GPU, 2 pthreads, 0 serial
+static int no_copy = 0; //consider data copy time (0) or not (1)
 int nthreads=1;
 __device__ node * gpu_find_leaf( node * root, int key) {
 	int i = 0;
@@ -633,7 +634,12 @@ void find_and_print(node * root, int key, bool verbose) {
       printf("Number of blocks:%d, Number of threads per block:%d\n",num_blocks,num_threads_per_block);
 
       //if(nthreads > num_of_nodes)
-        //nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct 
+        //nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct
+
+      if(no_copy) {
+         gpu_find<<< num_blocks,num_threads_per_block >>>(root, nthreads, num_of_nodes); //warmup run
+         cudaDeviceSynchronize();
+      }
       cudaEvent_t start, stop;
       cudaEventCreate(&start);
       cudaEventCreate(&stop);
@@ -1781,6 +1787,7 @@ int main( int argc, char ** argv ) {
 
    type_run = atoi(argv[3]);
    nthreads = atoi(argv[4]);
+   no_copy = atoi(argv[5]);
 	if (argc > 2) {
 		input_file = argv[2];
 		fp = fopen(input_file, "r");
