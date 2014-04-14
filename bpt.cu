@@ -56,7 +56,9 @@
 #define true 1
 #endif
 
-
+//#include<iostream>
+//#include<list>
+//using namespace std;
 // Default order is 4.
 #define DEFAULT_ORDER 4
 
@@ -143,6 +145,7 @@ typedef struct node {
  * default value.
  */
 int order = DEFAULT_ORDER;
+__device__ int g_order = DEFAULT_ORDER;
 
 /* The queue is used to print the tree in
  * level order, starting from the root
@@ -184,6 +187,10 @@ static int num_of_nodes=0; //used to know how many nodes exist in the b+tree
 static int type_run = 1; //1 GPU, 2 pthreads, 0 serial
 static int no_copy = 0; //consider data copy time (0) or not (1)
 int nthreads=1;
+
+__device__ node *g_root;
+__global__ void gpu_find(int nthreads, int num_nodes);
+__global__ void gpu_input(int nthreads, int num_nodes);
 __device__ node * gpu_find_leaf( node * root, int key) {
 	int i = 0;
 	node * c = root;
@@ -199,40 +206,6 @@ __device__ node * gpu_find_leaf( node * root, int key) {
 		c = (node *)c->pointers[i];
 	}
 	return c;
-}
-
-
-__global__ void gpu_find(node * root, int nthreads, int num_nodes)
-{
-   int idx = blockDim.x*blockIdx.x +threadIdx.x;
-
-   //printf("thread %d.\n", idx);
-   int i = 0;
-   record * c;
-   int key = idx%num_nodes;
-   if(idx < nthreads) {
-      //node * n = gpu_find_leaf( root, key);
-      node * n = gpu_find_leaf( root, key);
-      if (n == NULL) {
-         c=NULL;
-         return;
-      }
-      for (i = 0; i < n->num_keys; i++)
-         if (n->keys[i] == key) break;
-      if (i == n->num_keys) {
-         c=NULL;
-         return;
-      }
-      else
-      {
-         c = (record *)(n->pointers[i]);
-      }
-
-      if (c == NULL)
-        printf("Record not found under key %d.\n", key);
-    //  else 
-    //     printf("Found key %d, value %d.\n",key, c->value);
-   }
 }
 
 
@@ -637,7 +610,7 @@ void find_and_print(node * root, int key, bool verbose) {
         //nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct
 
       if(no_copy) {
-         gpu_find<<< num_blocks,num_threads_per_block >>>(root, nthreads, num_of_nodes); //warmup run
+         gpu_find<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes); //warmup run
          cudaDeviceSynchronize();
       }
       cudaEvent_t start, stop;
@@ -645,7 +618,9 @@ void find_and_print(node * root, int key, bool verbose) {
       cudaEventCreate(&stop);
       cudaEventRecord(start, 0);
       //gpu_find<<< 1,1 >>>(*c,root, key, nthreads);
-      gpu_find<<< num_blocks,num_threads_per_block >>>(root, nthreads, num_of_nodes);
+      gpu_input<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes);
+      cudaDeviceSynchronize();
+      gpu_find<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes);
       cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
       cudaEventRecord(stop, 0);
       cudaEventSynchronize(stop);
@@ -1237,6 +1212,432 @@ node * start_new_tree(int key, record * pointer) {
 	return root;
 }
 
+__device__ int g_cut( int length ) {
+	if (length % 2 == 0)
+		return length/2;
+	else
+		return length/2 + 1;
+}
+
+
+
+__device__ node * g_insert_into_node(node * root, node * n, 
+		int left_index, int key, node * right) {
+	int i;
+
+	for (i = n->num_keys; i > left_index; i--) {
+		n->pointers[i + 1] = n->pointers[i];
+		n->keys[i] = n->keys[i - 1];
+	}
+	n->pointers[left_index + 1] = right;
+	n->keys[left_index] = key;
+	n->num_keys++;
+	return root;
+}
+
+
+__device__ int g_get_left_index(node * parent, node * left) {
+
+	int left_index = 0;
+	while (left_index <= parent->num_keys && 
+			parent->pointers[left_index] != left)
+		left_index++;
+	return left_index;
+}
+
+
+__device__ node * g_make_node( void ) {
+   node * new_node;
+   new_node = (node *)malloc(sizeof(node));
+
+   new_node->keys = (int *)malloc( (g_order - 1) * sizeof(int) );
+   new_node->pointers = (void **)malloc( g_order * sizeof(void *) );
+   new_node->is_leaf = false;
+   new_node->num_keys = 0;
+   new_node->parent = NULL;
+   new_node->next = NULL;
+   return new_node;
+}
+
+__device__ node * g_make_leaf( void ) {
+	node * leaf = g_make_node();
+	leaf->is_leaf = true;
+	return leaf;
+}
+__device__ node * g_insert_into_new_root(node * left, int key, node * right) {
+
+	node * root = g_make_node();
+	root->keys[0] = key;
+	root->pointers[0] = left;
+	root->pointers[1] = right;
+	root->num_keys++;
+	root->parent = NULL;
+	left->parent = root;
+	right->parent = root;
+	return root;
+}
+
+
+__device__ node * g_insert_into_parent(node * root, node * left, int key, node * right);
+__device__ node * g_insert_into_node_after_splitting(node * root, node * old_node, int left_index, 
+		int key, node * right) {
+
+   int i, j, split, k_prime;
+   node * new_node, * child;
+   int * temp_keys;
+   node ** temp_pointers;
+
+   /* First create a temporary set of keys and pointers
+    * to hold everything in order, including
+    * the new key and pointer, inserted in their
+    * correct places. 
+    * Then create a new node and copy half of the 
+    * keys and pointers to the old node and
+    * the other half to the new.
+    */
+
+   temp_pointers = (node **)malloc( (g_order + 1) * sizeof(node *) );
+   temp_keys = (int *)malloc( g_order * sizeof(int) );
+
+   for (i = 0, j = 0; i < old_node->num_keys + 1; i++, j++) {
+      if (j == left_index + 1) j++;
+      temp_pointers[j] = (node *)old_node->pointers[i];
+   }
+
+   for (i = 0, j = 0; i < old_node->num_keys; i++, j++) {
+      if (j == left_index) j++;
+      temp_keys[j] = old_node->keys[i];
+   }
+
+   temp_pointers[left_index + 1] = right;
+   temp_keys[left_index] = key;
+
+   /* Create the new node and copy
+    * half the keys and pointers to the
+    * old and half to the new.
+    */  
+   split = g_cut(g_order);
+   new_node = g_make_node();
+   old_node->num_keys = 0;
+   for (i = 0; i < split - 1; i++) {
+      old_node->pointers[i] = temp_pointers[i];
+      old_node->keys[i] = temp_keys[i];
+      old_node->num_keys++;
+   }
+   old_node->pointers[i] = temp_pointers[i];
+   k_prime = temp_keys[split - 1];
+   for (++i, j = 0; i < g_order; i++, j++) {
+      new_node->pointers[j] = temp_pointers[i];
+      new_node->keys[j] = temp_keys[i];
+      new_node->num_keys++;
+   }
+   new_node->pointers[j] = temp_pointers[i];
+
+   free(temp_pointers);
+   free(temp_keys);
+   new_node->parent = old_node->parent;
+   for (i = 0; i <= new_node->num_keys; i++) {
+      child = (node *)new_node->pointers[i];
+      child->parent = new_node;
+   }
+
+   /* Insert a new key into the parent of the two
+    * nodes resulting from the split, with
+    * the old node to the left and the new to the right.
+    */
+
+   return g_insert_into_parent(root, old_node, k_prime, new_node);
+}
+
+
+
+__device__ node * g_insert_into_parent(node * root, node * left, int key, node * right) {
+
+	int left_index;
+	node * parent;
+
+	parent = left->parent;
+
+	/* Case: new root. */
+
+	if (parent == NULL)
+		return g_insert_into_new_root(left, key, right);
+
+	/* Case: leaf or node. (Remainder of
+	 * function body.)  
+	 */
+
+	/* Find the parent's pointer to the left 
+	 * node.
+	 */
+
+	left_index = g_get_left_index(parent, left);
+
+
+	/* Simple case: the new key fits into the node. 
+	 */
+
+	if (parent->num_keys < g_order - 1)
+		return g_insert_into_node(root, parent, left_index, key, right);
+
+	/* Harder case:  split a node in order 
+	 * to preserve the B+ tree properties.
+	 */
+
+	return g_insert_into_node_after_splitting(root, parent, left_index, key, right);
+}
+
+
+
+
+
+
+
+__device__ node * g_insert_into_leaf_after_splitting(node * root, node * leaf, int key, record * pointer) {
+
+   node * new_leaf;
+   int * temp_keys;
+   void ** temp_pointers;
+   int insertion_index, split, new_key, i, j;
+
+   new_leaf = g_make_leaf();
+
+
+   temp_keys = (int *)malloc( g_order * sizeof(int) );
+
+   temp_pointers = (void **)malloc( g_order * sizeof(void *) );
+
+   insertion_index = 0;
+   while (insertion_index < g_order - 1 && leaf->keys[insertion_index] < key)
+      insertion_index++;
+
+   for (i = 0, j = 0; i < leaf->num_keys; i++, j++) {
+      if (j == insertion_index) j++;
+      temp_keys[j] = leaf->keys[i];
+      temp_pointers[j] = leaf->pointers[i];
+   }
+
+   temp_keys[insertion_index] = key;
+   temp_pointers[insertion_index] = pointer;
+
+   leaf->num_keys = 0;
+
+   split = g_cut(g_order - 1);
+
+   for (i = 0; i < split; i++) {
+      leaf->pointers[i] = temp_pointers[i];
+      leaf->keys[i] = temp_keys[i];
+      leaf->num_keys++;
+   }
+
+   for (i = split, j = 0; i < g_order; i++, j++) {
+      new_leaf->pointers[j] = temp_pointers[i];
+      new_leaf->keys[j] = temp_keys[i];
+      new_leaf->num_keys++;
+   }
+
+   free(temp_pointers);
+   free(temp_keys);
+
+   new_leaf->pointers[g_order - 1] = leaf->pointers[g_order - 1];
+   leaf->pointers[g_order - 1] = new_leaf;
+
+   for (i = leaf->num_keys; i < g_order - 1; i++)
+      leaf->pointers[i] = NULL;
+   for (i = new_leaf->num_keys; i < g_order - 1; i++)
+      new_leaf->pointers[i] = NULL;
+
+   new_leaf->parent = leaf->parent;
+   new_key = new_leaf->keys[0];
+
+   return g_insert_into_parent(root, leaf, new_key, new_leaf);
+}
+
+
+
+__device__ node * g_insert_into_leaf( node * leaf, int key, record * pointer ) {
+
+	int i, insertion_point;
+
+	insertion_point = 0;
+	while (insertion_point < leaf->num_keys && leaf->keys[insertion_point] < key)
+		insertion_point++;
+
+	for (i = leaf->num_keys; i > insertion_point; i--) {
+		leaf->keys[i] = leaf->keys[i - 1];
+		leaf->pointers[i] = leaf->pointers[i - 1];
+	}
+	leaf->keys[insertion_point] = key;
+	leaf->pointers[insertion_point] = pointer;
+	leaf->num_keys++;
+	return leaf;
+}
+
+
+
+
+__device__ node * g_start_new_tree(int key, record * pointer) {
+
+	node * root = g_make_leaf();
+	root->keys[0] = key;
+	root->pointers[0] = pointer;
+	root->pointers[g_order - 1] = NULL;
+	root->parent = NULL;
+	root->num_keys++;
+	return root;
+}
+
+
+__device__ record * g_make_record(int value) {
+   record * new_record;
+   new_record = (record *)malloc(sizeof(record));
+   new_record->value = value;
+	return new_record;
+}
+
+
+
+__device__ node * g_find_leaf( node * root, int key, bool verbose ) {
+	int i = 0;
+	node * c = root;
+	if (c == NULL) {
+		if (verbose) 
+			printf("Empty tree.\n");
+		return c;
+	}
+	while (!c->is_leaf) {
+		if (verbose) {
+			printf("[");
+			for (i = 0; i < c->num_keys - 1; i++)
+				printf("%d ", c->keys[i]);
+			printf("%d] ", c->keys[i]);
+		}
+		i = 0;
+		while (i < c->num_keys) {
+			if (key >= c->keys[i]) i++;
+			else break;
+		}
+		if (verbose)
+			printf("%d ->\n", i);
+		c = (node *)c->pointers[i];
+	}
+	if (verbose) {
+		printf("Leaf [");
+		for (i = 0; i < c->num_keys - 1; i++)
+			printf("%d ", c->keys[i]);
+		printf("%d] ->\n", c->keys[i]);
+	}
+	return c;
+}
+
+
+__device__ record * g_find( node * root, int key, bool verbose ) {
+	int i = 0;
+	node * c = g_find_leaf( root, key, verbose );
+	if (c == NULL) return NULL;
+	for (i = 0; i < c->num_keys; i++)
+		if (c->keys[i] == key) break;
+	if (i == c->num_keys) 
+		return NULL;
+	else
+		return (record *)c->pointers[i];
+}
+
+
+__device__ node * g_insert( node * root, int key, int value ) {
+
+	record * pointer;
+	node * leaf;
+
+	/* The current implementation ignores
+	 * duplicates.
+	 */
+
+	if (g_find(root, key, false) != NULL)
+		return root;
+
+	/* Create a new record for the
+	 * value.
+	 */
+	pointer = g_make_record(value);
+
+
+	/* Case: the tree does not exist yet.
+	 * Start a new tree.
+	 */
+
+	if (root == NULL) 
+		return g_start_new_tree(key, pointer);
+
+
+	/* Case: the tree already exists.
+	 * (Rest of function body.)
+	 */
+
+	leaf = g_find_leaf(root, key, false);
+
+	/* Case: leaf has room for key and pointer.
+	 */
+
+	if (leaf->num_keys < g_order - 1) {
+		leaf = g_insert_into_leaf(leaf, key, pointer);
+		return root;
+	}
+
+
+	/* Case:  leaf must be split.
+	 */
+
+	return g_insert_into_leaf_after_splitting(root, leaf, key, pointer);
+}
+__global__ void gpu_input(int nthreads, int num_nodes)
+{
+   int idx = blockDim.x*blockIdx.x +threadIdx.x;
+   if(idx == 0)
+   {
+      for(int g=0; g<num_nodes; g++)
+         g_insert(g_root,g,g);
+   }
+   
+}
+
+__global__ void gpu_find(int nthreads, int num_nodes)
+{
+   int idx = blockDim.x*blockIdx.x +threadIdx.x;
+
+   node *root = g_root;
+   //printf("thread %d.\n", idx);
+   int i = 0;
+   record * c;
+   int key = idx%num_nodes;
+   if(idx < nthreads) {
+      //node * n = gpu_find_leaf( root, key);
+      node * n = gpu_find_leaf( root, key);
+      if (n == NULL) {
+         c=NULL;
+         return;
+      }
+      for (i = 0; i < n->num_keys; i++)
+         if (n->keys[i] == key) break;
+      if (i == n->num_keys) {
+         c=NULL;
+         return;
+      }
+      else
+      {
+         c = (record *)(n->pointers[i]);
+      }
+
+      if (c == NULL)
+        printf("Record not found under key %d.\n", key);
+    //  else 
+    //     printf("Found key %d, value %d.\n",key, c->value);
+   }
+}
+
+
+
+
 
 
 /* Master insertion function.
@@ -1762,12 +2163,11 @@ node * destroy_tree(node * root) {
 
 int main( int argc, char ** argv ) {
 
-	char * input_file;
-	FILE * fp;
 	node * root;
 	int input=0, range2;
 	char instruction;
 	char license_part;
+   //list<int> input_list;
 
 	root = NULL;
 	verbose_output = false;
@@ -1785,89 +2185,86 @@ int main( int argc, char ** argv ) {
 	//usage_1();  
 	//usage_2();
 
-   type_run = atoi(argv[3]);
-   nthreads = atoi(argv[4]);
-   no_copy = atoi(argv[5]);
-	if (argc > 2) {
-		input_file = argv[2];
-		fp = fopen(input_file, "r");
-		if (fp == NULL) {
-			perror("Failure to open input file.");
-			exit(EXIT_FAILURE);
-		}
-		while (!feof(fp)) {
-			fscanf(fp, "%d\n", &input);
-			root = insert(root, input, input);
-         num_of_nodes++;
-		}
-		fclose(fp);
-		//print_tree(root);
-	}
+   type_run = atoi(argv[2]);
+   nthreads = atoi(argv[3]);
+   no_copy = atoi(argv[4]);
+   num_of_nodes = nthreads;
+   if(type_run!=1) {
+      for(input=0; input<nthreads; input++) {
+         root = insert(root, input, input);
+      }
+   }
+   else {
+      cudaDeviceSetLimit(cudaLimitMallocHeapSize,256*(1 << 20));
+      size_t heapsize=0;
+      cudaDeviceGetLimit(&heapsize, cudaLimitMallocHeapSize);
+      printf("Heap size found to be %d KB\n",(int)heapsize/1024); 
+   }
 
-      instruction='f';
-		switch (instruction) {
-		case 'd':
-			scanf("%d", &input);
-			root = delete_node(root, input);
-			print_tree(root);
-			break;
-		case 'i':
-			scanf("%d", &input);
-			root = insert(root, input, input);
-			print_tree(root);
-			break;
-		case 'f':
-		case 'p':
-			//scanf("%d %d", &input, &nthreads);
-			find_and_print(root, input, instruction == 'p');
-			break;
-		case 'r':
-			scanf("%d %d", &input, &range2);
-			if (input > range2) {
-				int tmp = range2;
-				range2 = input;
-				input = tmp;
-			}
-			find_and_print_range(root, input, range2, instruction == 'p');
-			break;
-		case 'l':
-			print_leaves(root);
-			break;
-		case 'q':
-			while (getchar() != (int)'\n');
-			return EXIT_SUCCESS;
-		case 's':
-			if (scanf("how %c", &license_part) == 0) {
-				usage_2();
-				break;
-			}
-			switch(license_part) {
-			case 'w':
-				print_license(LICENSE_WARRANTEE);
-				break;
-			case 'c':
-				print_license(LICENSE_CONDITIONS);
-				break;
-			default:
-				usage_2();
-				break;
-			}
-			break;
-		case 't':
-			print_tree(root);
-			break;
-		case 'v':
-			verbose_output = !verbose_output;
-			break;
-		case 'x':
-			if (root)
-				root = destroy_tree(root);
-			print_tree(root);
-			break;
-		default:
-			usage_2();
-			break;
-		}
+   instruction='f';
+   switch (instruction) {
+      case 'd':
+         scanf("%d", &input);
+         root = delete_node(root, input);
+         print_tree(root);
+         break;
+      case 'i':
+         scanf("%d", &input);
+         root = insert(root, input, input);
+         print_tree(root);
+         break;
+      case 'f':
+      case 'p':
+         //scanf("%d %d", &input, &nthreads);
+         find_and_print(root, input, instruction == 'p');
+         break;
+      case 'r':
+         scanf("%d %d", &input, &range2);
+         if (input > range2) {
+            int tmp = range2;
+            range2 = input;
+            input = tmp;
+         }
+         find_and_print_range(root, input, range2, instruction == 'p');
+         break;
+      case 'l':
+         print_leaves(root);
+         break;
+      case 'q':
+         while (getchar() != (int)'\n');
+         return EXIT_SUCCESS;
+      case 's':
+         if (scanf("how %c", &license_part) == 0) {
+            usage_2();
+            break;
+         }
+         switch(license_part) {
+            case 'w':
+               print_license(LICENSE_WARRANTEE);
+               break;
+            case 'c':
+               print_license(LICENSE_CONDITIONS);
+               break;
+            default:
+               usage_2();
+               break;
+         }
+         break;
+      case 't':
+         print_tree(root);
+         break;
+      case 'v':
+         verbose_output = !verbose_output;
+         break;
+      case 'x':
+         if (root)
+            root = destroy_tree(root);
+         print_tree(root);
+         break;
+      default:
+         usage_2();
+         break;
+   }
 
-	return EXIT_SUCCESS;
+   return EXIT_SUCCESS;
 }
