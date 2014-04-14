@@ -1239,9 +1239,19 @@ __device__ int g_get_left_index(node * parent, node * left) {
 __device__ node * g_make_node( void ) {
    node * new_node;
    new_node = (node *)malloc(sizeof(node));
+   if(new_node == NULL)
+      printf("malloc ERROR new_node\n");
 
    new_node->keys = (int *)malloc( (g_order - 1) * sizeof(int) );
+   if(new_node->keys == NULL)
+      printf("malloc ERROR new_node->keys\n");
+
+
    new_node->pointers = (void **)malloc( g_order * sizeof(void *) );
+   if(new_node->pointers == NULL)
+      printf("malloc ERROR new_node-pointers\n");
+
+
    new_node->is_leaf = false;
    new_node->num_keys = 0;
    new_node->parent = NULL;
@@ -1287,7 +1297,11 @@ __device__ node * g_insert_into_node_after_splitting(node * root, node * old_nod
     */
 
    temp_pointers = (node **)malloc( (g_order + 1) * sizeof(node *) );
+   if(temp_pointers == NULL)
+      printf("malloc ERROR temp_pointers\n");
    temp_keys = (int *)malloc( g_order * sizeof(int) );
+   if(temp_keys == NULL)
+      printf("malloc ERROR temp_keys\n");
 
    for (i = 0, j = 0; i < old_node->num_keys + 1; i++, j++) {
       if (j == left_index + 1) j++;
@@ -1394,8 +1408,12 @@ __device__ node * g_insert_into_leaf_after_splitting(node * root, node * leaf, i
 
 
    temp_keys = (int *)malloc( g_order * sizeof(int) );
+   if(temp_keys == NULL)
+      printf("malloc ERROR temp_keys\n");
 
    temp_pointers = (void **)malloc( g_order * sizeof(void *) );
+   if(temp_pointers == NULL)
+      printf("malloc ERROR temp_pointers\n");
 
    insertion_index = 0;
    while (insertion_index < g_order - 1 && leaf->keys[insertion_index] < key)
@@ -1481,6 +1499,9 @@ __device__ node * g_start_new_tree(int key, record * pointer) {
 __device__ record * g_make_record(int value) {
    record * new_record;
    new_record = (record *)malloc(sizeof(record));
+   if(new_record == NULL)
+      printf("malloc ERROR new_record\n");
+
    new_record->value = value;
 	return new_record;
 }
