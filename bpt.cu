@@ -56,6 +56,8 @@
 #define true 1
 #endif
 
+
+#include <halloc.h>
 //#include<iostream>
 //#include<list>
 //using namespace std;
@@ -1238,16 +1240,16 @@ __device__ int g_get_left_index(node * parent, node * left) {
 
 __device__ node * g_make_node( void ) {
    node * new_node;
-   new_node = (node *)malloc(sizeof(node));
+   new_node = (node *)hamalloc(sizeof(node));
    if(new_node == NULL)
       printf("malloc ERROR new_node\n");
 
-   new_node->keys = (int *)malloc( (g_order - 1) * sizeof(int) );
+   new_node->keys = (int *)hamalloc( (g_order - 1) * sizeof(int) );
    if(new_node->keys == NULL)
       printf("malloc ERROR new_node->keys\n");
 
 
-   new_node->pointers = (void **)malloc( g_order * sizeof(void *) );
+   new_node->pointers = (void **)hamalloc( g_order * sizeof(void *) );
    if(new_node->pointers == NULL)
       printf("malloc ERROR new_node-pointers\n");
 
@@ -1296,10 +1298,10 @@ __device__ node * g_insert_into_node_after_splitting(node * root, node * old_nod
     * the other half to the new.
     */
 
-   temp_pointers = (node **)malloc( (g_order + 1) * sizeof(node *) );
+   temp_pointers = (node **)hamalloc( (g_order + 1) * sizeof(node *) );
    if(temp_pointers == NULL)
       printf("malloc ERROR temp_pointers\n");
-   temp_keys = (int *)malloc( g_order * sizeof(int) );
+   temp_keys = (int *)hamalloc( g_order * sizeof(int) );
    if(temp_keys == NULL)
       printf("malloc ERROR temp_keys\n");
 
@@ -1407,11 +1409,11 @@ __device__ node * g_insert_into_leaf_after_splitting(node * root, node * leaf, i
    new_leaf = g_make_leaf();
 
 
-   temp_keys = (int *)malloc( g_order * sizeof(int) );
+   temp_keys = (int *)hamalloc( g_order * sizeof(int) );
    if(temp_keys == NULL)
       printf("malloc ERROR temp_keys\n");
 
-   temp_pointers = (void **)malloc( g_order * sizeof(void *) );
+   temp_pointers = (void **)hamalloc( g_order * sizeof(void *) );
    if(temp_pointers == NULL)
       printf("malloc ERROR temp_pointers\n");
 
@@ -1498,7 +1500,7 @@ __device__ node * g_start_new_tree(int key, record * pointer) {
 
 __device__ record * g_make_record(int value) {
    record * new_record;
-   new_record = (record *)malloc(sizeof(record));
+   new_record = (record *)hamalloc(sizeof(record));
    if(new_record == NULL)
       printf("malloc ERROR new_record\n");
 
@@ -1641,8 +1643,8 @@ __global__ void gpu_find(int nthreads, int num_nodes)
 
       if (c == NULL)
          printf("Record not found under key %d.\n", key);
-     // else 
-     //    printf("Found key %d, value %d.\n",key, c->value);
+      //else 
+         //printf("Found key %d, value %d.\n",key, c->value);
    }
 }
 
@@ -2210,6 +2212,7 @@ int main( int argc, char ** argv ) {
       size_t heapsize=0;
       cudaDeviceGetLimit(&heapsize, cudaLimitMallocHeapSize);
       printf("Heap size found to be %d KB\n",(int)heapsize/1024); 
+      ha_init();
    }
 
    instruction='f';
