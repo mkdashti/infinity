@@ -606,9 +606,6 @@ void find_and_print(node * root, int key, bool verbose) {
 
       printf("Number of blocks:%d, Number of threads per block:%d\n",num_blocks,num_threads_per_block);
 
-      //if(nthreads > num_of_nodes)
-        //nthreads = num_of_nodes;     //this is so the check for idx<nthreads in gpu_find is correct
-
       if(no_copy) {
          gpu_find<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes); //warmup run
          cudaDeviceSynchronize();
@@ -617,8 +614,7 @@ void find_and_print(node * root, int key, bool verbose) {
       cudaEventCreate(&start);
       cudaEventCreate(&stop);
       cudaEventRecord(start, 0);
-      //gpu_find<<< 1,1 >>>(*c,root, key, nthreads);
-      gpu_input<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes);
+      gpu_input<<< 1,1 >>>(nthreads, num_of_nodes);
       cudaDeviceSynchronize();
       gpu_find<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes);
       cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
@@ -626,12 +622,6 @@ void find_and_print(node * root, int key, bool verbose) {
       cudaEventSynchronize(stop);
       float elapsedTime;
       cudaEventElapsedTime(&elapsedTime, start, stop);
-      /*if (c == NULL || c->invalid)
-         printf("Record not found under key %d.\n", key);
-      else 
-         printf("Record at %lx -- key %d, value %d.\n",
-               (unsigned long)c, key, c->value);
-       */
       printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
    }
 
@@ -1596,7 +1586,7 @@ __global__ void gpu_input(int nthreads, int num_nodes)
    if(idx == 0)
    {
       for(int g=0; g<num_nodes; g++)
-         g_insert(g_root,g,g);
+         g_root=g_insert(g_root,g,g);
    }
    
 }
@@ -1629,9 +1619,9 @@ __global__ void gpu_find(int nthreads, int num_nodes)
       }
 
       if (c == NULL)
-        printf("Record not found under key %d.\n", key);
-    //  else 
-    //     printf("Found key %d, value %d.\n",key, c->value);
+         printf("Record not found under key %d.\n", key);
+     // else 
+     //    printf("Found key %d, value %d.\n",key, c->value);
    }
 }
 
@@ -2195,7 +2185,7 @@ int main( int argc, char ** argv ) {
       }
    }
    else {
-      cudaDeviceSetLimit(cudaLimitMallocHeapSize,256*(1 << 20));
+      cudaDeviceSetLimit(cudaLimitMallocHeapSize,512*(1 << 20));
       size_t heapsize=0;
       cudaDeviceGetLimit(&heapsize, cudaLimitMallocHeapSize);
       printf("Heap size found to be %d KB\n",(int)heapsize/1024); 
@@ -2265,6 +2255,6 @@ int main( int argc, char ** argv ) {
          usage_2();
          break;
    }
-
+   cudaDeviceReset();
    return EXIT_SUCCESS;
 }
