@@ -615,7 +615,7 @@ void find_and_print(node * root, int key, bool verbose) {
       cudaEventCreate(&stop);
       cudaEventRecord(start, 0);
       gpu_input<<< 1,1 >>>(nthreads, num_of_nodes);
-      cudaDeviceSynchronize();
+      //cudaDeviceSynchronize();
       gpu_find<<< num_blocks,num_threads_per_block >>>(nthreads, num_of_nodes);
       cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
       cudaEventRecord(stop, 0);
