@@ -2201,7 +2201,8 @@ int main( int argc, char ** argv ) {
    type_run = atoi(argv[2]);
    nthreads = atoi(argv[3]);
    no_copy = atoi(argv[4]);
-   num_of_nodes = nthreads;
+   //num_of_nodes = nthreads;
+   num_of_nodes = 8192;
    if(type_run!=1) {
       for(input=0; input<nthreads; input++) {
          root = insert(root, input, input);
