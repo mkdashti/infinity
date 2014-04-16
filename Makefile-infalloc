@@ -1,0 +1,22 @@
+CUDA_DIR = /usr/local/cuda-6.0
+
+CUDA_LIB_DIR := $(CUDA_DIR)/lib64
+CUDA_ARCH_FLAGS := -arch=sm_30
+CC_FLAGS += $(CUDA_ARCH_FLAGS)
+
+CC := $(CUDA_DIR)/bin/nvcc
+
+OBJ = bpt.o infalloc.o
+
+all: bpt
+
+bpt : $(OBJ)
+	$(CC) $(OBJ) $(CC_FLAGS) -o $@
+bpt.o: bpt.cu
+	$(CC) -c  $< $(CC_FLAGS)
+infalloc.o: infalloc.cu infalloc.h
+	$(CC) -c  $< $(CC_FLAGS)
+
+clean: 
+	rm -f bpt *.o
+

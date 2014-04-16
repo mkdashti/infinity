@@ -57,6 +57,8 @@
 #endif
 
 
+#include "infalloc.h"
+
 // Default order is 4.
 #define DEFAULT_ORDER 4
 
@@ -1784,6 +1786,9 @@ int main( int argc, char ** argv ) {
 	//license_notice();
 	//usage_1();  
 	//usage_2();
+
+
+   inf_init();
 
    type_run = atoi(argv[3]);
    nthreads = atoi(argv[4]);
