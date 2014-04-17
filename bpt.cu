@@ -56,82 +56,8 @@
 #define true 1
 #endif
 
-
-#include "infalloc.h"
-
-// Default order is 4.
-#define DEFAULT_ORDER 4
-
-// Minimum order is necessarily 3.  We set the maximum
-// order arbitrarily.  You may change the maximum order.
-#define MIN_ORDER 3
-#define MAX_ORDER 20
-
-// Constants for printing part or all of the GPL license.
-#define LICENSE_FILE "LICENSE.txt"
-#define LICENSE_WARRANTEE 0
-#define LICENSE_WARRANTEE_START 592
-#define LICENSE_WARRANTEE_END 624
-#define LICENSE_CONDITIONS 1
-#define LICENSE_CONDITIONS_START 70
-#define LICENSE_CONDITIONS_END 625
-
-
-// TYPES.
-
-/* Type representing the record
- * to which a given key refers.
- * In a real B+ tree system, the
- * record would hold data (in a database)
- * or a file (in an operating system)
- * or some other information.
- * Users can rewrite this part of the code
- * to change the type and content
- * of the value field.
- */
-typedef struct record {
-	int value;
-   bool invalid;
-} record;
-
-/* Type representing a node in the B+ tree.
- * This type is general enough to serve for both
- * the leaf and the internal node.
- * The heart of the node is the array
- * of keys and the array of corresponding
- * pointers.  The relation between keys
- * and pointers differs between leaves and
- * internal nodes.  In a leaf, the index
- * of each key equals the index of its corresponding
- * pointer, with a maximum of order - 1 key-pointer
- * pairs.  The last pointer points to the
- * leaf to the right (or NULL in the case
- * of the rightmost leaf).
- * In an internal node, the first pointer
- * refers to lower nodes with keys less than
- * the smallest key in the keys array.  Then,
- * with indices i starting at 0, the pointer
- * at i + 1 points to the subtree with keys
- * greater than or equal to the key in this
- * node at index i.
- * The num_keys field is used to keep
- * track of the number of valid keys.
- * In an internal node, the number of valid
- * pointers is always num_keys + 1.
- * In a leaf, the number of valid pointers
- * to data is always num_keys.  The
- * last leaf pointer points to the next leaf.
- */
-typedef struct node {
-	void ** pointers;
-	int * keys;
-	struct node * parent;
-	bool is_leaf;
-	int num_keys;
-	struct node * next; // Used for queue.
-} node;
-
-
+#include <assert.h>
+#include "btreetypes.h"
 // GLOBALS.
 
 /* The order determines the maximum and minimum
@@ -159,6 +85,15 @@ node * queue = NULL;
  * next to their corresponding keys.
  */
 bool verbose_output = false;
+
+#include "infalloc.h"
+extern node *nodes;
+extern node *node_parents;
+extern node *node_nexts;
+extern void **pointers;
+extern node **node_pointers;
+extern int *keys;
+extern record *records;
 
 
 #include <sys/time.h>
@@ -232,8 +167,8 @@ __global__ void gpu_find(node * root, int nthreads, int num_nodes)
 
       if (c == NULL)
         printf("Record not found under key %d.\n", key);
-    //  else 
-    //     printf("Found key %d, value %d.\n",key, c->value);
+      //else 
+        // printf("Found key %d, value %d.\n",key, c->value);
    }
 }
 
@@ -869,7 +804,8 @@ record * make_record(int value) {
    if(type_run != 1)
       new_record = (record *)malloc(sizeof(record));
    else {
-      cudaMallocManaged((void **)&new_record,sizeof(record));
+      //cudaMallocManaged((void **)&new_record,sizeof(record));
+      new_record = (record *)infalloc(1,RECORD);
    }
 	if (new_record == NULL) {
 		perror("Record creation.");
@@ -890,7 +826,8 @@ node * make_node( void ) {
    if(type_run != 1)
       new_node = (node *)malloc(sizeof(node));
    else
-      cudaMallocManaged((void **)&new_node,sizeof(node));
+      //cudaMallocManaged((void **)&new_node,sizeof(node));
+      new_node = (node *)infalloc(1,NODE);
 
 	if (new_node == NULL) {
 		perror("Node creation.");
@@ -899,7 +836,8 @@ node * make_node( void ) {
    if(type_run != 1)
       new_node->keys = (int *)malloc( (order - 1) * sizeof(int) );
    else
-      cudaMallocManaged((void **)&new_node->keys, (order - 1) * sizeof(int) );
+      //cudaMallocManaged((void **)&new_node->keys, (order - 1) * sizeof(int) );
+      new_node->keys = (int *)infalloc( (order -1),KEY);
 	if (new_node->keys == NULL) {
 		perror("New node keys array.");
 		exit(EXIT_FAILURE);
@@ -907,7 +845,8 @@ node * make_node( void ) {
    if(type_run != 1)
       new_node->pointers = (void **)malloc( order * sizeof(void *) );
    else
-      cudaMallocManaged( (void **)&(new_node->pointers),order * sizeof(void *) );
+      //cudaMallocManaged( (void **)&(new_node->pointers),order * sizeof(void *) );
+      new_node->pointers = (void **)infalloc(order,POINTER);
 	if (new_node->pointers == NULL) {
 		perror("New node pointers array.");
 		exit(EXIT_FAILURE);
@@ -983,7 +922,8 @@ node * insert_into_leaf_after_splitting(node * root, node * leaf, int key, recor
    if(type_run != 1)
       temp_keys = (int *)malloc( order * sizeof(int) );
    else
-      cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
+      //cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
+      temp_keys = (int *)infalloc(order,KEY);
 	if (temp_keys == NULL) {
 		perror("Temporary keys array.");
 		exit(EXIT_FAILURE);
@@ -992,7 +932,8 @@ node * insert_into_leaf_after_splitting(node * root, node * leaf, int key, recor
    if(type_run != 1)
       temp_pointers = (void **)malloc( order * sizeof(void *) );
    else
-      cudaMallocManaged((void **)&temp_pointers, order * sizeof(void *) );
+      //cudaMallocManaged((void **)&temp_pointers, order * sizeof(void *) );
+      temp_pointers = (void **)infalloc(order,POINTER);
 	if (temp_pointers == NULL) {
 		perror("Temporary pointers array.");
 		exit(EXIT_FAILURE);
@@ -1032,8 +973,8 @@ node * insert_into_leaf_after_splitting(node * root, node * leaf, int key, recor
       free(temp_keys);
    }
    else {
-      cudaFree(temp_pointers);
-      cudaFree(temp_keys);
+      //cudaFree(temp_pointers);
+      //cudaFree(temp_keys);
    }
 
 	new_leaf->pointers[order - 1] = leaf->pointers[order - 1];
@@ -1094,7 +1035,8 @@ node * insert_into_node_after_splitting(node * root, node * old_node, int left_i
    if(type_run != 1)
       temp_pointers = (node **)malloc( (order + 1) * sizeof(node *) );
    else
-      cudaMallocManaged((void **)&temp_pointers, (order + 1) * sizeof(node *) );
+      //cudaMallocManaged((void **)&temp_pointers, (order + 1) * sizeof(node *) );
+      temp_pointers = (node **)infalloc((order +1),NODE_POINTER);
 	if (temp_pointers == NULL) {
 		perror("Temporary pointers array for splitting nodes.");
 		exit(EXIT_FAILURE);
@@ -1102,7 +1044,8 @@ node * insert_into_node_after_splitting(node * root, node * old_node, int left_i
    if(type_run != 1)
       temp_keys = (int *)malloc( order * sizeof(int) );
    else
-      cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
+      //cudaMallocManaged((void **)&temp_keys, order * sizeof(int) );
+      temp_keys = (int *)infalloc(order,KEY);
 	if (temp_keys == NULL) {
 		perror("Temporary keys array for splitting nodes.");
 		exit(EXIT_FAILURE);
@@ -1147,8 +1090,8 @@ node * insert_into_node_after_splitting(node * root, node * old_node, int left_i
       free(temp_keys);
    }
    else {
-      cudaFree(temp_pointers);
-      cudaFree(temp_keys);
+      //cudaFree(temp_pointers);
+      //cudaFree(temp_keys);
    }
 	new_node->parent = old_node->parent;
 	for (i = 0; i <= new_node->num_keys; i++) {
@@ -1787,8 +1730,15 @@ int main( int argc, char ** argv ) {
 	//usage_1();  
 	//usage_2();
 
-
    inf_init();
+   //node *mynode = &nodes[0];
+   //node *mynode = (node*)infalloc(NODE);
+   //mynode->keys[0]=keys[0]=1;
+
+   //printf("mynode->keys[0] = %d\n",mynode->keys[0]);
+   //printf("&nodes[0] = %lx &nodes[1] = %lx\n",(void *)mynode,(void *)&nodes[1]);
+
+   //exit(EXIT_SUCCESS);
 
    type_run = atoi(argv[3]);
    nthreads = atoi(argv[4]);
@@ -1874,5 +1824,6 @@ int main( int argc, char ** argv ) {
 			break;
 		}
 
+   inf_shutdown();
 	return EXIT_SUCCESS;
 }
