@@ -1762,8 +1762,6 @@ node * destroy_tree(node * root) {
 
 int main( int argc, char ** argv ) {
 
-	char * input_file;
-	FILE * fp;
 	node * root;
 	int input=0, range2;
 	char instruction;
@@ -1788,27 +1786,17 @@ int main( int argc, char ** argv ) {
    type_run = atoi(argv[3]);
    nthreads = atoi(argv[4]);
    no_copy = atoi(argv[5]);
-	if (argc > 2) {
-		input_file = argv[2];
-		fp = fopen(input_file, "r");
-		if (fp == NULL) {
-			perror("Failure to open input file.");
-			exit(EXIT_FAILURE);
-		}
-		while (!feof(fp)) {
-			fscanf(fp, "%d\n", &input);
-			root = insert(root, input, input);
-         num_of_nodes++;
-		}
-		fclose(fp);
-		//print_tree(root);
-	}
+   int tree_size = atoi(argv[2]);
+   for( input=0; input<tree_size; input++) {
+      root = insert(root, input, input);
+      num_of_nodes++;
+   }
 
-      instruction='f';
-		switch (instruction) {
-		case 'd':
-			scanf("%d", &input);
-			root = delete_node(root, input);
+   instruction='f';
+   switch (instruction) {
+      case 'd':
+         scanf("%d", &input);
+         root = delete_node(root, input);
 			print_tree(root);
 			break;
 		case 'i':
