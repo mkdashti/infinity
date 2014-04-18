@@ -1,13 +1,6 @@
-#include <iostream>
-#include <map>
-using namespace std;
-
 #include <assert.h>
 #include "btreetypes.h"
 #include "infalloc.h"
-
-
-map<unsigned long, int> myMap;
 
 extern int order;
 node *nodes,*node_parents,*node_nexts;
