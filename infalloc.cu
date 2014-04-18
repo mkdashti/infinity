@@ -62,13 +62,13 @@ void infree(void *p)
 }
 void inf_init(void)
 {
-   assert((cudaMallocManaged((void **)&nodes,10*1024*1024*sizeof(node)))==cudaSuccess);
-   assert((cudaMallocManaged((void **)&node_parents,10*1024*1024*sizeof(node)))==cudaSuccess);
-   assert((cudaMallocManaged((void **)&node_nexts,10*1024*1024*sizeof(node)))==cudaSuccess);
-   assert((cudaMallocManaged((void **)&pointers,1*order*1024*1024*sizeof(void*)))==cudaSuccess);
-   assert((cudaMallocManaged((void **)&node_pointers,1*(order+1)*1024*1024*sizeof(node*)))==cudaSuccess);
-   assert((cudaMallocManaged((void **)&keys,1*order*1024*1024*sizeof(int)))==cudaSuccess);
-   assert((cudaMallocManaged((void **)&records,10*1024*1024*sizeof(record)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&nodes,4*1024*1024*sizeof(node)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&node_parents,4*1024*1024*sizeof(node)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&node_nexts,4*1024*1024*sizeof(node)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&pointers,4*order*1024*1024*sizeof(void*)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&node_pointers,4*(order+1)*1024*1024*sizeof(node*)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&keys,16*order*1024*1024*sizeof(int)))==cudaSuccess);
+   assert((cudaMallocManaged((void **)&records,16*1024*1024*sizeof(record)))==cudaSuccess);
 
 
 }
