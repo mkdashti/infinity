@@ -2,7 +2,7 @@
 #include "infalloc.h"
 #include "node.h"
 
-void *managed_memory;
+char *managed_memory;
 int track=0;
 extern int no_of_nodes;
 extern int edge_list_size;
@@ -26,7 +26,7 @@ void infree(void *p)
 }
 void inf_init(void)
 {
-   assert(
+   /*assert(
          (cudaMallocManaged((void **)&managed_memory,
                             sizeof(Node)*no_of_nodes+
                             3*sizeof(bool)*no_of_nodes+
@@ -34,6 +34,8 @@ void inf_init(void)
                             sizeof(int)*no_of_nodes+
                             sizeof(bool)
                             ))==cudaSuccess);
+*/
+   assert(cudaMallocManaged((void **)&managed_memory,64*1024*1024*sizeof(char))==cudaSuccess);
 }
 
 void inf_shutdown(void)
