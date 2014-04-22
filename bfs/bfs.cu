@@ -21,21 +21,27 @@
 #include <math.h>
 #include <cuda.h>
 
+#include "infalloc.h"
+
 #define MAX_THREADS_PER_BLOCK 512
 
 int no_of_nodes;
 int edge_list_size;
 FILE *fp;
 
-//Structure to hold a node information
-struct Node
-{
-	int starting;
-	int no_of_edges;
-};
-
+#include "node.h"
 #include "kernel.cu"
 #include "kernel2.cu"
+
+
+Node *graph_nodes;
+bool *graph_mask;
+bool *updating_graph_mask;
+bool *graph_visited;
+int *graph_edges;
+int *m_cost;
+bool *over;
+
 
 void BFSGraph(int argc, char** argv);
 
@@ -92,14 +98,11 @@ void BFSGraph( int argc, char** argv)
 	}
 
 	// allocate host memory
-   Node *graph_nodes;
-   bool *graph_mask;
-   bool *updating_graph_mask;
-   bool *graph_visited;
-	cudaMallocManaged((void**)&graph_nodes,sizeof(Node)*no_of_nodes);
-	cudaMallocManaged((void**)&graph_mask,sizeof(bool)*no_of_nodes);
-	cudaMallocManaged((void**)&updating_graph_mask,sizeof(bool)*no_of_nodes);
-	cudaMallocManaged((void**)&graph_visited,sizeof(bool)*no_of_nodes);
+   inf_init();
+   graph_nodes=(Node *)infalloc(sizeof(Node)*no_of_nodes,DEFAULT);
+	graph_mask=(bool *)infalloc(sizeof(bool)*no_of_nodes,DEFAULT);
+	updating_graph_mask=(bool *)infalloc(sizeof(bool)*no_of_nodes,DEFAULT);
+	graph_visited=(bool *)infalloc(sizeof(bool)*no_of_nodes,DEFAULT);
 
 	int start, edgeno;   
 	// initalize the memory
@@ -113,6 +116,7 @@ void BFSGraph( int argc, char** argv)
 		graph_visited[i]=false;
 	}
 
+
 	//read the source node from the file
 	fscanf(fp,"%d",&source);
 	source=0;
@@ -124,8 +128,7 @@ void BFSGraph( int argc, char** argv)
 	fscanf(fp,"%d",&edge_list_size);
 
 	int id,cost;
-   int *graph_edges;
-	cudaMallocManaged((void**)&graph_edges,sizeof(int)*edge_list_size);
+	graph_edges=(int *)infalloc(sizeof(int)*edge_list_size,DEFAULT);
 	for(int i=0; i < edge_list_size ; i++)
 	{
 		fscanf(fp,"%d",&id);
@@ -139,15 +142,13 @@ void BFSGraph( int argc, char** argv)
 	printf("Read File\n");
 
 	// allocate mem for the result on host side
-   int *m_cost;
-	cudaMallocManaged((void**)&m_cost, sizeof(int)*no_of_nodes);
+	m_cost=(int *)infalloc(sizeof(int)*no_of_nodes,DEFAULT);
 	for(int i=0;i<no_of_nodes;i++)
 		m_cost[i]=-1;
 	m_cost[source]=0;
 	
 	//make a bool to check if the execution is over
-	bool *over;
-	cudaMallocManaged( (void**) &over, sizeof(bool));
+	over=(bool *)infalloc(sizeof(bool),DEFAULT);
 
 	printf("Copied Everything to GPU memory\n");
 
@@ -186,10 +187,5 @@ void BFSGraph( int argc, char** argv)
 
 
 	// cleanup memory
-	cudaFree(graph_nodes);
-	cudaFree(graph_edges);
-	cudaFree(graph_mask);
-	cudaFree(updating_graph_mask);
-	cudaFree(graph_visited);
-	cudaFree(m_cost);
+   inf_shutdown();
 }
