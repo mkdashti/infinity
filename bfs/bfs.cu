@@ -158,6 +158,10 @@ void BFSGraph( int argc, char** argv)
 
 	int k=0;
 	printf("Start traversing the tree\n");
+   cudaEvent_t begin, stop;
+   cudaEventCreate(&begin);
+   cudaEventCreate(&stop);
+   cudaEventRecord(begin, 0);
 	//Call the Kernel untill all the elements of Frontier are not false
 	do
 	{
@@ -174,7 +178,13 @@ void BFSGraph( int argc, char** argv)
 		k++;
 	}
 	while(*over);
+   cudaDeviceSynchronize(); // this is really important! I have been debugging for while before relizing this is necessary!
+   cudaEventRecord(stop, 0);
+   cudaEventSynchronize(stop);
+   float elapsedTime;
+   cudaEventElapsedTime(&elapsedTime, begin, stop);
 
+   printf("Cuda kernel Processing time: %f (ms)\n", elapsedTime);
 
 	printf("Kernel Executed %d times\n",k);
 
