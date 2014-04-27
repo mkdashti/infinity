@@ -672,8 +672,8 @@ void find_and_print(node * root, int key, bool verbose) {
       //   else 
             //printf("Record at %lx -- key %d, value %d.\n",(unsigned long)r, key, r->value);
       //      printf("key %d, value %d.\n",k, r->value);
-         clock_gettime(CLOCK_REALTIME, &end_time);
       }
+         clock_gettime(CLOCK_REALTIME, &end_time);
       printf("serial CPU Processing time: %f (ms)\n",diff(start_time,end_time)/1000000.0);
    }
 }
