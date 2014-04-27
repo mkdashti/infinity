@@ -1728,7 +1728,6 @@ int main( int argc, char ** argv ) {
 	//usage_1();  
 	//usage_2();
 
-   inf_init();
    //node *mynode = &nodes[0];
    //node *mynode = (node*)infalloc(NODE);
    //mynode->keys[0]=keys[0]=1;
@@ -1742,6 +1741,10 @@ int main( int argc, char ** argv ) {
    nthreads = atoi(argv[4]);
    no_copy = atoi(argv[5]);
    int tree_size = atoi(argv[2]);
+
+
+   if(type_run == 1)
+      inf_init();
    for(input=0; input<tree_size; input++) {
       root = insert(root, input, input);
       num_of_nodes++;
@@ -1812,6 +1815,7 @@ int main( int argc, char ** argv ) {
 			break;
 		}
 
-   inf_shutdown();
+   if(type_run == 1)
+      inf_shutdown();
 	return EXIT_SUCCESS;
 }
