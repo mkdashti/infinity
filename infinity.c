@@ -381,6 +381,8 @@ int main(int argc, char **argv) {
 
    if(gpu_run) {
       /* Create a device and context */
+      struct timespec start_time, end_time;
+      clock_gettime(CLOCK_REALTIME, &start_time);
       device = create_device();
       context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
       if(err < 0) {
@@ -544,6 +546,10 @@ int main(int argc, char **argv) {
          exit(1);   
       }
 
+      clock_gettime(CLOCK_REALTIME, &end_time);
+      printf("Wall clock time: %f\n",
+            diff(start_time,end_time)/1000000.0);
+ 
 
       // checking the maximum buffer size allocation
       err = clGetDeviceInfo(device,
