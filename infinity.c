@@ -196,6 +196,7 @@ void usage(void)
    printf(" -t <t> (number of threads)\n");
    printf(" -s <shuffle> (1/0)\n");
    printf(" -m <number of integer entries in data array in Mega>\n");
+   printf(" -r <read/write benchmark 0/1>\n");
    printf(" -h print usage\n");
    printf(" -d debug\n");
    exit (EXIT_FAILURE);
