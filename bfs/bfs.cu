@@ -23,6 +23,27 @@
 
 #define MAX_THREADS_PER_BLOCK 512
 
+
+#include <sys/time.h>
+#include <time.h>
+double diff(struct timespec start, struct timespec end)
+{
+   struct timespec temp;
+   if ((end.tv_nsec-start.tv_nsec)<0) {
+      temp.tv_sec = end.tv_sec-start.tv_sec-1;
+      temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+   } else {
+      temp.tv_sec = end.tv_sec-start.tv_sec;
+      temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+   }
+   if(temp.tv_sec)
+      return (double)(temp.tv_sec*1000000000+temp.tv_nsec);
+   else
+      return (double)temp.tv_nsec;
+
+}
+
+
 int no_of_nodes;
 int edge_list_size;
 FILE *fp;
@@ -96,24 +117,41 @@ void BFSGraph( int argc, char** argv)
    bool *graph_mask;
    bool *updating_graph_mask;
    bool *graph_visited;
+
+   struct timespec start_time, end_time;
+   double TotalMallocManagedTime = 0.0;
+   clock_gettime(CLOCK_REALTIME, &start_time);
+
 	cudaMallocManaged((void**)&graph_nodes,sizeof(Node)*no_of_nodes);
 	cudaMallocManaged((void**)&graph_mask,sizeof(bool)*no_of_nodes);
 	cudaMallocManaged((void**)&updating_graph_mask,sizeof(bool)*no_of_nodes);
 	cudaMallocManaged((void**)&graph_visited,sizeof(bool)*no_of_nodes);
 
-	int start, edgeno;   
+   clock_gettime(CLOCK_REALTIME, &end_time);
+   TotalMallocManagedTime+=diff(start_time,end_time)/1000000.0;
+
+	int start, edgeno;  
+
+
+   struct timespec start_time1, end_time1;
+   double indirectManagedOverhead = 0.0;
 	// initalize the memory
 	for( unsigned int i = 0; i < no_of_nodes; i++) 
 	{
 		fscanf(fp,"%d %d",&start,&edgeno);
+      
+      clock_gettime(CLOCK_REALTIME, &start_time1);
+
 		graph_nodes[i].starting = start;
 		graph_nodes[i].no_of_edges = edgeno;
 		graph_mask[i]=false;
 		updating_graph_mask[i]=false;
 		graph_visited[i]=false;
-	}
 
-	//read the source node from the file
+      clock_gettime(CLOCK_REALTIME, &end_time1);
+      indirectManagedOverhead+=diff(start_time1,end_time1)/1000000.0;
+	}
+   //read the source node from the file
 	fscanf(fp,"%d",&source);
 	source=0;
 
@@ -125,12 +163,24 @@ void BFSGraph( int argc, char** argv)
 
 	int id,cost;
    int *graph_edges;
+
+
+   clock_gettime(CLOCK_REALTIME, &start_time);
 	cudaMallocManaged((void**)&graph_edges,sizeof(int)*edge_list_size);
+   clock_gettime(CLOCK_REALTIME, &end_time);
+   TotalMallocManagedTime+=diff(start_time,end_time)/1000000.0;
+
 	for(int i=0; i < edge_list_size ; i++)
 	{
 		fscanf(fp,"%d",&id);
 		fscanf(fp,"%d",&cost);
+
+      clock_gettime(CLOCK_REALTIME, &start_time1);
+
 		graph_edges[i] = id;
+
+      clock_gettime(CLOCK_REALTIME, &end_time1);
+      indirectManagedOverhead+=diff(start_time1,end_time1)/1000000.0;
 	}
 
 	if(fp)
@@ -140,14 +190,31 @@ void BFSGraph( int argc, char** argv)
 
 	// allocate mem for the result on host side
    int *m_cost;
+
+   clock_gettime(CLOCK_REALTIME, &start_time);
 	cudaMallocManaged((void**)&m_cost, sizeof(int)*no_of_nodes);
+   clock_gettime(CLOCK_REALTIME, &end_time);
+   TotalMallocManagedTime+=diff(start_time,end_time)/1000000.0;
+
+
+   clock_gettime(CLOCK_REALTIME, &start_time1);
+
 	for(int i=0;i<no_of_nodes;i++)
 		m_cost[i]=-1;
+
+   clock_gettime(CLOCK_REALTIME, &end_time1);
+   indirectManagedOverhead+=diff(start_time1,end_time1)/1000000.0;
+
 	m_cost[source]=0;
 	
 	//make a bool to check if the execution is over
 	bool *over;
+
+   clock_gettime(CLOCK_REALTIME, &start_time);
 	cudaMallocManaged( (void**) &over, sizeof(bool));
+   clock_gettime(CLOCK_REALTIME, &end_time);
+   TotalMallocManagedTime+=diff(start_time,end_time)/1000000.0;
+
 
 	printf("Copied Everything to GPU memory\n");
 
@@ -157,7 +224,14 @@ void BFSGraph( int argc, char** argv)
 
 	int k=0;
 	printf("Start traversing the tree\n");
-	//Call the Kernel untill all the elements of Frontier are not false
+
+   cudaEvent_t begin, end;                                                                       
+   cudaEventCreate(&begin);
+   cudaEventCreate(&end);
+   cudaEventRecord(begin, 0);
+
+   clock_gettime(CLOCK_REALTIME, &start_time);
+   //Call the Kernel untill all the elements of Frontier are not false
 	do
 	{
       *over = false;
@@ -174,15 +248,25 @@ void BFSGraph( int argc, char** argv)
 	}
 	while(*over);
 
+   clock_gettime(CLOCK_REALTIME, &end_time);
 
+   cudaDeviceSynchronize();
+   cudaEventRecord(end, 0);
+   cudaEventSynchronize(end);
+   float elapsedTime;
+   cudaEventElapsedTime(&elapsedTime, begin, end);
+   printf("[CUDA EVENTS]  Cuda kernel Processing time: %f (ms)\n", elapsedTime);
+   printf("[CPU TIMESPEC] Cuda kernel Processing time: %f (ms)\n", diff(start_time,end_time)/1000000.0);
+   printf("Total cudaMallocManaged time:     %f (ms)\n", TotalMallocManagedTime);
+   printf("Indirect Managed memory overhead: %f (ms)\n", indirectManagedOverhead);
 	printf("Kernel Executed %d times\n",k);
 
 	//Store the result into a file
-	//FILE *fpo = fopen("result.txt","w");
-	//for(int i=0;i<no_of_nodes;i++)
-	//	fprintf(fpo,"%d) cost:%d\n",i,m_cost[i]);
-	//fclose(fpo);
-	//printf("Result stored in result.txt\n");
+	FILE *fpo = fopen("result.txt","w");
+	for(int i=0;i<no_of_nodes;i++)
+		fprintf(fpo,"%d) cost:%d\n",i,m_cost[i]);
+	fclose(fpo);
+	printf("Result stored in result.txt\n");
 
 
 	// cleanup memory
