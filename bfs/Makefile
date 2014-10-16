@@ -1,4 +1,4 @@
-CUDA_DIR := /usr/local/cuda-6.0
+CUDA_DIR := /usr/local/cuda-6.5
 CUDA_LIB_DIR := $(CUDA_DIR)/lib64
 
 CC := $(CUDA_DIR)/bin/nvcc -arch=sm_30
